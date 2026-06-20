@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Le Sens des Grandeurs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+:root{
+  --ink:#10201A;
+  --ink-soft:#1c2f27;
+  --paper:#F2ECD9;
+  --paper-dim:#e6dec5;
+  --green:#3F6B52;
+  --green-deep:#27483A;
+  --gold:#BE9A48;
+  --rust:#A8402F;
+  --line: rgba(190,154,72,.35);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--ink);
+  color:var(--paper);
+  font-family:'Work Sans', sans-serif;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+.app{
+  max-width:760px;
+  margin:0 auto;
+  padding:28px 20px 80px;
+}
+h1,h2,h3{
+  font-family:'Fraunces', serif;
+  font-weight:600;
+  letter-spacing:-0.01em;
+  margin:0;
+}
+.eyebrow{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--gold);
+  margin-bottom:10px;
+  display:block;
+}
+.mono{font-family:'IBM Plex Mono', monospace;}
+
+/* ---------- log ruler header ---------- */
+.ruler-wrap{
+  margin-bottom:34px;
+}
+.ruler{
+  position:relative;
+  height:46px;
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+}
+.ruler .tick{
+  position:absolute;
+  top:0;
+  bottom:0;
+  width:1px;
+  background:var(--line);
+}
+.ruler .tick span{
+  position:absolute;
+  top:50%;
+  transform:translate(-50%,-50%);
+  font-family:'IBM Plex Mono', monospace;
+  font-size:10px;
+  color:rgba(242,236,217,.55);
+  white-space:nowrap;
+  background:var(--ink);
+  padding:0 6px;
+}
+.ruler .marker{
+  position:absolute;
+  top:-6px;
+  width:2px;
+  height:58px;
+  background:var(--gold);
+  transition:left .5s cubic-bezier(.6,0,.2,1);
+}
+.ruler .marker::after{
+  content:'';
+  position:absolute;
+  top:-5px;
+  left:50%;
+  transform:translateX(-50%);
+  width:9px;height:9px;
+  background:var(--gold);
+  border-radius:50%;
+}
+
+/* ---------- cards ---------- */
+.card{
+  background:var(--paper);
+  color:var(--ink);
+  border-radius:2px;
+  padding:36px 32px;
+  position:relative;
+  box-shadow:0 30px 60px -25px rgba(0,0,0,.6);
+}
+.card::before, .card::after{
+  content:'';
+  position:absolute;
+  width:34px; height:34px;
+  border:1px solid var(--gold);
+  opacity:.55;
+}
+.card::before{ top:10px; left:10px; border-right:none; border-bottom:none; }
+.card::after{ bottom:10px; right:10px; border-left:none; border-top:none; }
+
+.step-label{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--green-deep);
+  opacity:.75;
+  margin-bottom:14px;
+}
+.question{
+  font-size:23px;
+  line-height:1.32;
+  margin-bottom:6px;
+}
+.helper{
+  font-size:14.5px;
+  color:#4a4438;
+  margin-top:8px;
+  line-height:1.5;
+}
+
+/* QCM options */
+.options{
+  margin-top:22px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.opt{
+  text-align:left;
+  border:1px solid #cdc3a4;
+  background:transparent;
+  color:var(--ink);
+  padding:13px 16px;
+  font-family:'Work Sans',sans-serif;
+  font-size:15px;
+  border-radius:2px;
+  cursor:pointer;
+  transition:border-color .15s, background .15s;
+}
+.opt:hover{ border-color:var(--green); }
+.opt.selected{ border-color:var(--green); background:rgba(63,107,82,.1); font-weight:500;}
+.opt.correct{ border-color:var(--green); background:rgba(63,107,82,.18); }
+.opt.incorrect{ border-color:var(--rust); background:rgba(168,64,47,.12); }
+.opt:disabled{ cursor:default; }
+
+/* numeric input */
+.numrow{
+  margin-top:24px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.numrow input[type=number]{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:20px;
+  padding:10px 12px;
+  width:160px;
+  border:1px solid #b9ad88;
+  border-radius:2px;
+  background:#fbf8ee;
+  color:var(--ink);
+}
+.numrow input[type=number]:focus{ outline:2px solid var(--green); outline-offset:1px;}
+.unit{ font-family:'IBM Plex Mono', monospace; font-size:14px; color:#4a4438; }
+
+/* likert */
+.likert{
+  margin-top:24px;
+  display:flex;
+  gap:8px;
+  justify-content:space-between;
+}
+.likert button{
+  flex:1;
+  height:46px;
+  border:1px solid #cdc3a4;
+  background:transparent;
+  border-radius:2px;
+  cursor:pointer;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:14px;
+  color:var(--ink);
+}
+.likert button.selected{ background:var(--green); color:var(--paper); border-color:var(--green); }
+.likert-labels{
+  display:flex; justify-content:space-between;
+  font-size:11.5px; color:#5a5340; margin-top:6px;
+}
+
+/* feedback */
+.feedback{
+  margin-top:20px;
+  padding:14px 16px;
+  border-left:3px solid var(--green);
+  background:rgba(63,107,82,.08);
+  font-size:14.5px;
+  line-height:1.55;
+  display:none;
+}
+.feedback.show{display:block;}
+.feedback b{ color:var(--green-deep); }
+.feedback.warn{ border-left-color:var(--rust); background:rgba(168,64,47,.08); }
+
+/* buttons */
+.actions{
+  margin-top:28px;
+  display:flex;
+  justify-content:flex-end;
+  gap:12px;
+}
+.btn{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:13px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  padding:13px 26px;
+  border-radius:2px;
+  border:1px solid var(--green-deep);
+  background:var(--green-deep);
+  color:var(--paper);
+  cursor:pointer;
+  transition:opacity .15s, transform .1s;
+}
+.btn:hover{ opacity:.88; }
+.btn:active{ transform:translateY(1px); }
+.btn:disabled{ opacity:.35; cursor:not-allowed; }
+.btn.ghost{
+  background:transparent;
+  color:var(--ink);
+  border-color:#b9ad88;
+}
+
+/* intro */
+.intro-title{
+  font-size:38px;
+  line-height:1.08;
+  margin-bottom:18px;
+}
+.intro-sub{
+  font-size:16px;
+  color:#4a4438;
+  line-height:1.6;
+  max-width:54ch;
+  margin-bottom:8px;
+}
+.example-box{
+  margin-top:24px;
+  padding:16px 18px;
+  background:#e9e1c8;
+  border-radius:2px;
+  font-size:14px;
+  line-height:1.6;
+  color:#3a3528;
+}
+
+/* progress dots */
+.dots{
+  display:flex; gap:6px; margin-top:24px;
+}
+.dot{
+  width:6px; height:6px; border-radius:50%;
+  background:rgba(16,32,26,.18);
+}
+.dot.done{ background:var(--green); }
+.dot.current{ background:var(--gold); }
+
+/* results */
+.section-title{
+  font-size:13px;
+  font-family:'IBM Plex Mono', monospace;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--gold);
+  margin: 38px 0 14px;
+}
+.results-head{
+  text-align:center;
+  margin-bottom:8px;
+}
+.chart-wrap{
+  background:var(--paper);
+  border-radius:2px;
+  padding:24px 18px 8px;
+  position:relative;
+}
+.chart-wrap::before, .chart-wrap::after{
+  content:'';
+  position:absolute;
+  width:34px; height:34px;
+  border:1px solid var(--gold);
+  opacity:.55;
+}
+.chart-wrap::before{ top:10px; left:10px; border-right:none; border-bottom:none; }
+.chart-wrap::after{ bottom:10px; right:10px; border-left:none; border-top:none; }
+
+.gauge-card{
+  background:var(--paper);
+  color:var(--ink);
+  border-radius:2px;
+  padding:28px 28px 24px;
+  margin-top:8px;
+}
+.gauge-track{
+  position:relative;
+  height:10px;
+  background:linear-gradient(90deg,var(--green) 0%, var(--gold) 50%, var(--rust) 100%);
+  border-radius:6px;
+  margin:18px 0 6px;
+}
+.gauge-marker{
+  position:absolute;
+  top:-9px;
+  width:3px; height:28px;
+  background:var(--ink);
+  transform:translateX(-50%);
+}
+.gauge-ends{
+  display:flex; justify-content:space-between;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  color:#5a5340;
+}
+.profile-name{
+  font-family:'Fraunces', serif;
+  font-size:26px;
+  font-weight:600;
+  margin:18px 0 4px;
+}
+.stat-row{
+  display:flex; gap:24px; margin-top:14px; flex-wrap:wrap;
+}
+.stat{
+  font-family:'IBM Plex Mono', monospace;
+}
+.stat .v{ font-size:20px; font-weight:600; color:var(--green-deep); display:block; }
+.stat .l{ font-size:11px; color:#5a5340; text-transform:uppercase; letter-spacing:.08em; }
+
+.recap{
+  background:var(--paper-dim);
+  border-radius:2px;
+  padding:6px 0;
+  margin-top:0;
+}
+.recap-card{
+  background:var(--paper);
+  border-radius:2px;
+  padding:22px 26px;
+  margin-top:8px;
+}
+.recap-item{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  padding:11px 0;
+  border-bottom:1px solid #d9cfae;
+  font-size:14.5px;
+}
+.recap-item:last-child{ border-bottom:none; }
+.recap-item .q{ color:#4a4438; }
+.recap-item .a{ font-weight:600; font-family:'IBM Plex Mono', monospace; color:var(--green-deep); text-align:right; }
+
+.synth{
+  margin-top:30px;
+  font-size:15px;
+  line-height:1.65;
+  color:rgba(242,236,217,.88);
+}
+.synth b{ color:var(--gold); }
+
+.restart-row{
+  margin-top:36px;
+  text-align:center;
+}
+footer{
+  margin-top:60px;
+  font-size:11.5px;
+  color:rgba(242,236,217,.4);
+  text-align:center;
+  line-height:1.7;
+}
+
+@media (max-width:540px){
+  .card{ padding:26px 20px; }
+  .intro-title{ font-size:29px; }
+  .question{ font-size:19px; }
+  .ruler .tick span{ font-size:9px; padding:0 3px;}
+  .likert{ gap:5px; }
+  .likert button{ font-size:12px; height:42px;}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+/* ===================== DATA ===================== */
+
+const RULER_TICKS = [
+  {pos:0,   label:'10³ · mille'},
+  {pos:0.25,label:'10⁶ · million'},
+  {pos:0.55,label:'10⁹ · milliard'},
+  {pos:0.85,label:'10¹² · billion'},
+  {pos:1,   label:'10¹⁵'}
+];
+
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function qcmScore(idx,correct){ return clamp(100-35*Math.abs(idx-correct),0,100); }
+function logScore(value,trueVal,k=55){
+  const v = Math.max(Number(value)||0.0001,0.0001);
+  const diff = Math.abs(Math.log10(v/trueVal));
+  return clamp(100-k*diff,0,100);
+}
+function fmt(n){ return new Intl.NumberFormat('fr-FR').format(Math.round(n)); }
+
+const STEPS = [
+  {id:'intro', type:'intro'},
+
+  {id:'a1', type:'qcm', cat:'temps',
+   label:'Échelle temporelle — 1 / 3',
+   q:'Un million de secondes, ça représente environ\u2026',
+   options:['11 heures','11 jours','11 mois','11 ans'],
+   correct:1,
+   feedback:'1 000 000 s ÷ 86 400 s/jour ≈ <b>11,6 jours</b>. Le million reste une échelle « humaine », presque palpable : c\u2019est moins de deux semaines.'},
+
+  {id:'a2', type:'qcm', cat:'temps',
+   label:'Échelle temporelle — 2 / 3',
+   q:'Un milliard de secondes, ça représente environ\u2026',
+   options:['11 jours','1 an','32 ans','320 ans'],
+   correct:2,
+   feedback:'1 000 000 000 s ≈ <b>31,7 ans</b> — presque une vie de travail. Entre le million et le milliard, on saute de « deux semaines » à « une génération ».'},
+
+  {id:'a3', type:'qcm', cat:'temps',
+   label:'Échelle temporelle — 3 / 3',
+   q:'Mille milliards de secondes (10¹², un « billion » anglo-saxon), ça représente environ\u2026',
+   options:['32 ans','320 ans','3 200 ans','32 000 ans'],
+   correct:3,
+   feedback:'1 000 000 000 000 s ≈ <b>31 700 ans</b> — avant l\u2019agriculture, avant l\u2019écriture. Le passage milliard → mille milliards est un saut bien plus violent que million → milliard.'},
+
+  {id:'b1', type:'qcm', cat:'espace',
+   label:'Échelle physique — 1 / 2',
+   q:'En empilant des billets de 100 €, une pile représentant 1 million d\u2019euros mesurerait environ\u2026',
+   options:['10 cm','1 m','10 m','100 m'],
+   correct:1,
+   feedback:'10 000 billets de 0,1 mm d\u2019épaisseur ≈ <b>1 mètre</b> — la hauteur d\u2019une table. Un million d\u2019euros tient littéralement dans une pièce.'},
+
+  {id:'b2', type:'qcm', cat:'espace',
+   label:'Échelle physique — 2 / 2',
+   q:'Et 1 milliard d\u2019euros en billets de 100 €, empilés, atteindrait à peu près\u2026',
+   options:['La Tour Eiffel (330 m)','1 km de hauteur','Le Mont Blanc (4 800 m)','L\u2019Everest (8 800 m)'],
+   correct:1,
+   feedback:'×1000 la pile précédente : <b>environ 1 km</b> — plus de trois Tours Eiffel empilées, mais bien moins que le Mont Blanc. L\u2019intuition « ça doit être immense comme une montagne » trompe presque tout le monde.'},
+
+  {id:'c1', type:'qcm', cat:'capital',
+   label:'Choc d\u2019échelle — fortune',
+   q:'Si vous dépensiez 1 million $ par jour, combien de temps faudrait-il pour épuiser une fortune de l\u2019ordre de 400 milliards $ (l\u2019ordre de grandeur régulièrement cité pour Elon Musk) ?',
+   options:['Environ 3 ans','Environ 30 ans','Environ 300 ans','Plus de 1 000 ans'],
+   correct:3,
+   feedback:'400 000 000 000 ÷ 1 000 000 = 400 000 jours ≈ <b>1 096 ans</b>. À ce rythme, on dépenserait toujours cette fortune si on avait commencé au Moyen Âge.'},
+
+  {id:'c2', type:'numeric', cat:'espace', unit:'km', true:80, tolK:55,
+   label:'Estimation libre — empilement',
+   q:'Avec des billets de 500 €, quelle hauteur (en kilomètres) ferait une pile représentant ces mêmes 400 milliards $ ?',
+   helper:'Comparez mentalement : l\u2019altitude de croisière d\u2019un avion de ligne est d\u2019environ 10 km, l\u2019ISS orbite vers 400 km.',
+   feedbackFn:(v)=>`La réponse est environ <b>80 km</b> (800 millions de billets × 0,1 mm). C\u2019est huit fois l\u2019altitude de croisière d\u2019un avion — mais cinq fois moins que l\u2019orbite de l\u2019ISS. Votre estimation : <b>${fmt(v)} km</b>.`},
+
+  {id:'e1', type:'numeric', cat:'capital', unit:'milliers de milliards $ (trillions)', true:125, tolK:55,
+   label:'Estimation libre — masse monétaire',
+   q:'Selon vous, quelle est la masse monétaire totale en circulation dans le monde, toutes devises confondues (estimation grossière, en milliers de milliards de dollars) ?',
+   helper:'« Mille milliards » = un trillion = 10¹².',
+   feedbackFn:(v)=>`Les estimations tournent autour de <b>120 à 130 000 milliards $</b> (soit ~125 « mille milliards »). Votre estimation : <b>${fmt(v)} 000 milliards $</b>.`},
+
+  {id:'d1', type:'numeric', cat:'risk', unit:'€', isPrice:true,
+   label:'Aversion au risque — le distributeur',
+   q:'Une machine à snacks dans un hall d\u2019immeuble génère un bénéfice net stable d\u2019environ 400 €/mois (4 800 €/an). Vous devrez gérer vous-même le réapprovisionnement et l\u2019entretien. Combien seriez-vous prêt·e à payer pour l\u2019acheter ?',
+   helper:'Il n\u2019y a pas de bonne réponse ici — votre prix révèle votre tolérance au risque.'},
+
+  {id:'d2', type:'likert',
+   label:'À considérer — 1 / 2',
+   q:'À quel point la panne / l\u2019entretien de la machine vous inquiète-t-il ?',
+   left:'Pas du tout', right:'Énormément'},
+
+  {id:'d3', type:'likert',
+   label:'À considérer — 2 / 2',
+   q:'Pensez-vous que la demande de snacks dans ce hall va plutôt\u2026',
+   left:'Baisser', right:'Beaucoup augmenter'},
+
+  {id:'d4', type:'qcm', cat:'risk_horizon',
+   label:'Horizon de retour sur investissement',
+   q:'Combien de temps êtes-vous prêt·e à attendre avant de récupérer votre mise ?',
+   options:['Moins d\u20191 an','1 à 3 ans','3 à 7 ans','7 à 15 ans','Peu importe, sur 15 ans et plus'],
+   correct:null},
+
+  {id:'results', type:'results'}
+];
+
+/* ===================== STATE ===================== */
+let state = {
+  step: 0,
+  answers: {},
+  selectedTemp: null // for current QCM selection before commit
+};
+
+const app = document.getElementById('app');
+const progressSteps = STEPS.filter(s=>s.type!=='intro' && s.type!=='results');
+
+/* ===================== RULER ===================== */
+function rulerHTML(frac){
+  const ticks = RULER_TICKS.map(t=>`
+    <div class="tick" style="left:${t.pos*100}%"><span>${t.label}</span></div>
+  `).join('');
+  return `
+  <div class="ruler-wrap">
+    <div class="ruler">
+      ${ticks}
+      <div class="marker" style="left:${clamp(frac,0,1)*100}%"></div>
+    </div>
+  </div>`;
+}
+
+/* ===================== RENDER ===================== */
+function render(){
+  const step = STEPS[state.step];
+  let html = '';
+
+  if(step.type !== 'intro'){
+    const idx = progressSteps.indexOf(step);
+    const frac = step.type==='results' ? 1 : idx/(progressSteps.length-1);
+    html += rulerHTML(frac);
+  }
+
+  if(step.type === 'intro') html += renderIntro();
+  else if(step.type === 'qcm') html += renderQCM(step);
+  else if(step.type === 'numeric') html += renderNumeric(step);
+  else if(step.type === 'likert') html += renderLikert(step);
+  else if(step.type === 'results') html += renderResults();
+
+  app.innerHTML = html;
+  attachHandlers(step);
+  if(step.type === 'results') drawRadar();
+}
+
+function renderIntro(){
+  return `
+    <span class="eyebrow">Un test d\u2019intuition, pas un examen</span>
+    <h1 class="intro-title">Le Sens des Grandeurs</h1>
+    <p class="intro-sub">Notre cerveau est très mauvais pour distinguer un million d\u2019un milliard — et encore plus mauvais pour distinguer un milliard de mille milliards. Ce court test mesure votre intuition des grosses sommes d\u2019argent, sur trois axes : le temps, l\u2019espace, et le capital.</p>
+    <p class="intro-sub">Une dernière partie, plus légère, s\u2019appuie sur un dilemme classique — acheter ou non un distributeur automatique — pour esquisser votre rapport au risque financier.</p>
+    <div class="example-box">
+      <b>Exemple qui inspire ce test :</b> un distributeur de snacks rapporte environ 400 €/mois. Combien seriez-vous prêt·e à l\u2019acheter ? Le prix que vous choisissez en dit long sur votre aversion au risque — bien plus qu\u2019un sondage classique.
+    </div>
+    <div class="actions" style="justify-content:flex-start; margin-top:30px;">
+      <button class="btn" onclick="goTo(1)">Commencer →</button>
+    </div>
+    <footer style="text-align:left; margin-top:40px;">Valeurs approximatives, à but pédagogique — pas des chiffres certifiés.</footer>
+  `;
+}
+
+function renderQCM(step){
+  const prev = state.answers[step.id];
+  const opts = step.options.map((o,i)=>{
+    let cls = 'opt';
+    if(prev !== undefined){
+      if(step.correct !== null){
+        if(i === step.correct) cls += ' correct';
+        else if(i === prev) cls += ' incorrect';
+      } else if(i === prev){
+        cls += ' selected';
+      }
+    }
+    return `<button class="${cls}" data-idx="${i}" ${prev!==undefined?'disabled':''} onclick="answerQCM('${step.id}',${i})">${o}</button>`;
+  }).join('');
+
+  let feedback = '';
+  if(prev !== undefined && step.feedback){
+    feedback = `<div class="feedback show">${step.feedback}</div>`;
+  }
+
+  return `
+    <div class="card">
+      <div class="step-label">${step.label}</div>
+      <div class="question">${step.q}</div>
+      <div class="options">${opts}</div>
+      ${feedback}
+    </div>
+    ${navButtons(prev !== undefined)}
+  `;
+}
+
+function renderNumeric(step){
+  const prev = state.answers[step.id];
+  let feedback = '';
+  if(prev !== undefined && step.feedbackFn){
+    feedback = `<div class="feedback show">${step.feedbackFn(prev)}</div>`;
+  }
+  let helper = step.helper ? `<div class="helper">${step.helper}</div>` : '';
+  return `
+    <div class="card">
+      <div class="step-label">${step.label}</div>
+      <div class="question">${step.q}</div>
+      ${helper}
+      <div class="numrow">
+        <input type="number" min="0" id="numinput" value="${prev!==undefined?prev:''}" placeholder="0" ${prev!==undefined?'disabled':''}>
+        <span class="unit">${step.unit}</span>
+        ${prev===undefined?`<button class="btn ghost" onclick="answerNumeric('${step.id}')">Valider</button>`:''}
+      </div>
+      ${feedback}
+    </div>
+    ${navButtons(prev !== undefined)}
+  `;
+}
+
+function renderLikert(step){
+  const prev = state.answers[step.id];
+  const btns = [1,2,3,4,5].map(v=>`
+    <button class="${prev===v?'selected':''}" onclick="answerLikert('${step.id}',${v})">${v}</button>
+  `).join('');
+  return `
+    <div class="card">
+      <div class="step-label">${step.label}</div>
+      <div class="question">${step.q}</div>
+      <div class="likert">${btns}</div>
+      <div class="likert-labels"><span>${step.left}</span><span>${step.right}</span></div>
+    </div>
+    ${navButtons(prev !== undefined)}
+  `;
+}
+
+function navButtons(canNext){
+  const isLast = state.step === STEPS.length-2;
+  return `
+    <div class="actions">
+      ${state.step>1?`<button class="btn ghost" onclick="goTo(${state.step-1})">← Retour</button>`:''}
+      <button class="btn" ${canNext?'':'disabled'} onclick="goTo(${state.step+1})">${isLast?'Voir mes résultats →':'Suivant →'}</button>
+    </div>
+  `;
+}
+
+/* ===================== HANDLERS ===================== */
+function answerQCM(id, idx){
+  if(state.answers[id] !== undefined) return;
+  state.answers[id] = idx;
+  render();
+}
+function answerNumeric(id){
+  const input = document.getElementById('numinput');
+  const v = parseFloat(input.value);
+  if(isNaN(v) || v < 0) { input.focus(); return; }
+  state.answers[id] = v;
+  render();
+}
+function answerLikert(id, v){
+  state.answers[id] = v;
+  render();
+}
+function goTo(i){
+  state.step = i;
+  window.scrollTo({top:0, behavior:'smooth'});
+  render();
+}
+function restart(){
+  state = {step:0, answers:{}};
+  render();
+}
+function attachHandlers(){ /* using inline onclick, nothing extra needed */ }
+
+/* ===================== RESULTS ===================== */
+function computeScores(){
+  const a = state.answers;
+  const temps = (qcmScore(a.a1,1)+qcmScore(a.a2,2)+qcmScore(a.a3,3))/3;
+  const espace = (qcmScore(a.b1,1)+qcmScore(a.b2,1)+logScore(a.c2,80))/3;
+  const capital = (qcmScore(a.c1,3)+logScore(a.e1,125))/2;
+  return {temps, espace, capital};
+}
+
+function computeRisk(){
+  const price = Math.max(a_or(state.answers.d1, 4800),1);
+  const yieldPct = 4800/price*100;
+  const payback = price/4800;
+  let profile, blurb;
+  if(price <= 2400){ profile='Ultra-prudent·e'; blurb='Vous exigez un retour quasi immédiat — un rendement implicite de plus de 200 %/an. C\u2019est l\u2019attitude de quelqu\u2019un qui ne fait confiance qu\u2019au cash sous le matelas.'; }
+  else if(price <= 4800){ profile='Très averse au risque'; blurb='Vous voulez rentrer dans vos frais en moins d\u2019un an. Un rendement exigé de 100 % à 200 %/an : viable seulement si vous doutez fortement de la durabilité du flux.'; }
+  else if(price <= 14400){ profile='Averse au risque'; blurb='Retour sur 1 à 3 ans, rendement exigé de 33 % à 100 %/an. C\u2019est le réflexe le plus courant face à un actif inconnu et non garanti.'; }
+  else if(price <= 28800){ profile='Équilibré·e'; blurb='Retour sur 3 à 6 ans, rendement exigé de 17 % à 33 %/an — un niveau déjà proche de ce qu\u2019exigent des investisseurs en private equity pour un petit commerce.'; }
+  else if(price <= 48000){ profile='Tolérant·e au risque'; blurb='Retour sur 6 à 10 ans, rendement exigé de 10 % à 17 %/an. Vous valorisez la stabilité du revenu presque autant que sa taille.'; }
+  else if(price <= 96000){ profile='Très tolérant·e'; blurb='Retour sur 10 à 20 ans, rendement exigé de 5 % à 10 %/an — proche des multiples qu\u2019on paie pour une rente obligataire de bonne qualité.'; }
+  else { profile='Quasi-spéculatif·ve'; blurb='Retour au-delà de 20 ans, rendement exigé sous 5 %/an. Soit vous pensez que le flux va croître fortement, soit le prix payé n\u2019a plus grand-chose à voir avec les 400 €/mois actuels.'; }
+  return {price, yieldPct, payback, profile, blurb};
+}
+function a_or(v,d){ return (v===undefined||isNaN(v))?d:v; }
+
+function renderResults(){
+  const s = computeScores();
+  const r = computeRisk();
+  const a = state.answers;
+
+  const globalScore = Math.round((s.temps+s.espace+s.capital)/3);
+  let globalLabel;
+  if(globalScore>=80) globalLabel='Intuition aiguisée des grandes échelles';
+  else if(globalScore>=55) globalLabel='Bonne intuition, quelques angles morts';
+  else if(globalScore>=30) globalLabel='Le grand saut million → milliard vous échappe encore';
+  else globalLabel='Les très grands nombres restent abstraits pour vous — et c\u2019est le cas de presque tout le monde';
+
+  // gauge position (log scale 500€ to 150000€)
+  const lo=500, hi=150000;
+  const gaugePos = clamp(Math.log10(r.price/lo)/Math.log10(hi/lo),0,1)*100;
+
+  const likertLabel = (v,left,right)=>{
+    const map = {1:left, 2:`Plutôt ${left.toLowerCase()}`, 3:'Neutre', 4:`Plutôt ${right.toLowerCase()}`, 5:right};
+    return map[v] || '—';
+  };
+  const horizonLabels = ['Moins d\u20191 an','1 à 3 ans','3 à 7 ans','7 à 15 ans','15 ans et plus'];
+
+  return `
+    <div class="results-head">
+      <span class="eyebrow">Résultats</span>
+      <h2 style="font-size:30px;">${globalLabel}</h2>
+    </div>
+
+    <div class="section-title">Intuition des grandeurs</div>
+    <div class="chart-wrap">
+      <canvas id="radar" height="260"></canvas>
+    </div>
+
+    <div class="section-title">Profil de risque — le distributeur à 400 €/mois</div>
+    <div class="gauge-card">
+      <div class="profile-name">${r.profile}</div>
+      <p style="font-size:14.5px; line-height:1.6; color:#3a3528;">${r.blurb}</p>
+      <div class="gauge-track">
+        <div class="gauge-marker" style="left:${gaugePos}%"></div>
+      </div>
+      <div class="gauge-ends"><span>Prudent</span><span>Spéculatif</span></div>
+      <div class="stat-row">
+        <div class="stat"><span class="v">${fmt(r.price)} €</span><span class="l">Prix proposé</span></div>
+        <div class="stat"><span class="v">${r.payback.toFixed(1)} ans</span><span class="l">Retour sur mise</span></div>
+        <div class="stat"><span class="v">${r.yieldPct.toFixed(0)} %</span><span class="l">Rendement annuel exigé</span></div>
+      </div>
+    </div>
+
+    <div class="section-title">Ce que vous avez pris en compte</div>
+    <div class="recap-card">
+      <div class="recap-item"><span class="q">Inquiétude panne / entretien</span><span class="a">${likertLabel(a.d2,'Pas du tout','Énormément')}</span></div>
+      <div class="recap-item"><span class="q">Évolution attendue de la demande</span><span class="a">${likertLabel(a.d3,'Baisse','Forte hausse')}</span></div>
+      <div class="recap-item"><span class="q">Horizon de retour accepté</span><span class="a">${horizonLabels[a.d4] ?? '—'}</span></div>
+    </div>
+
+    <p class="synth">
+      Sur le temps, l\u2019espace et le capital, votre score combiné est de <b>${globalScore}/100</b>.
+      ${globalScore<55 ? 'Rassurez-vous : la quasi-totalité des gens sous-estiment radicalement l\u2019écart entre un million, un milliard et mille milliards — notre cerveau n\u2019a tout simplement pas évolué pour ça.' : 'Vous naviguez plutôt bien entre ces échelles, ce qui est rare : la plupart des gens compriment mentalement tout ce qui dépasse le million dans la même case « beaucoup ».'}
+    </p>
+
+    <div class="restart-row">
+      <button class="btn ghost" onclick="restart()">↺ Recommencer le test</button>
+    </div>
+    <footer>Toutes les valeurs de référence (secondes, hauteurs de billets, masse monétaire mondiale, patrimoine cité) sont des ordres de grandeur approximatifs à visée pédagogique.</footer>
+  `;
+}
+
+let radarChart;
+function drawRadar(){
+  const s = computeScores();
+  const ctx = document.getElementById('radar');
+  if(!ctx) return;
+  if(radarChart) radarChart.destroy();
+  radarChart = new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: ['Temps','Espace','Capital'],
+      datasets: [{
+        label: 'Votre score',
+        data: [s.temps, s.espace, s.capital],
+        backgroundColor: 'rgba(63,107,82,0.25)',
+        borderColor: '#3F6B52',
+        borderWidth: 2,
+        pointBackgroundColor: '#BE9A48',
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive:true,
+      scales:{
+        r:{
+          min:0, max:100,
+          ticks:{ display:false, stepSize:25 },
+          grid:{ color:'#d9cfae' },
+          angleLines:{ color:'#d9cfae' },
+          pointLabels:{
+            font:{ family:'IBM Plex Mono', size:13, weight:'600' },
+            color:'#27483A'
+          }
+        }
+      },
+      plugins:{ legend:{ display:false } }
+    }
+  });
+}
+
+render();
+</script>
+</body>
+</html>
