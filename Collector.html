@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#0f0f0f"/>
+<title>Dettes</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@500&display=swap');
+:root{
+  --bg:#0f0f0f;--bg2:#1a1a1a;--bg3:#242424;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.14);
+  --text:#f0f0f0;--muted:#888;--faint:#444;
+  --accent:#e8c84a;--accent-dim:rgba(232,200,74,0.1);
+  --green:#4ade80;--green-dim:rgba(74,222,128,0.1);
+  --red:#f87171;--red-dim:rgba(248,113,113,0.1);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;overscroll-behavior:none}
+
+/* Layout */
+#app{display:flex;flex-direction:column;height:100dvh}
+#hdr{padding:16px 16px 12px;background:var(--bg);border-bottom:.5px solid var(--border);flex-shrink:0}
+#hdr h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
+#hdr p{font-size:12px;color:var(--muted);margin-top:2px}
+#content{flex:1;overflow-y:auto;padding:14px 14px;padding-bottom:calc(80px + var(--safe-b))}
+
+/* Metrics */
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.mcard{background:var(--bg2);border:.5px solid var(--border);border-radius:12px;padding:12px 14px}
+.mcard.wide{grid-column:span 2}
+.mlabel{font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+.mval{font-size:20px;font-weight:600;font-family:'DM Mono',monospace}
+.cy{color:var(--accent)}.cg{color:var(--green)}.cr{color:var(--red)}
+
+/* Person cards */
+.person-card{background:var(--bg2);border:.5px solid var(--border);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.person-header{padding:14px 14px 10px;display:flex;justify-content:space-between;align-items:flex-start;cursor:pointer}
+.person-name{font-size:16px;font-weight:600}
+.person-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.person-totals{text-align:right;flex-shrink:0;margin-left:12px}
+.person-due{font-size:16px;font-weight:600;font-family:'DM Mono',monospace;color:var(--accent)}
+.person-margin{font-size:11px;color:var(--green);margin-top:2px}
+.person-paid{color:var(--muted);text-decoration:line-through}
+.expand-btn{font-size:11px;color:var(--faint);margin-top:6px}
+
+/* Debts list */
+.debts-list{border-top:.5px solid var(--border);display:none}
+.debts-list.open{display:block}
+.debt-row{padding:11px 14px;border-bottom:.5px solid var(--border);display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center}
+.debt-row:last-child{border-bottom:none}
+.debt-label{font-size:13px;font-weight:500}
+.debt-note{font-size:11px;color:var(--muted);margin-top:2px}
+.debt-amount{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;text-align:right}
+.debt-cost{font-size:11px;color:var(--muted);text-align:right;margin-top:2px}
+.debt-margin{font-size:11px;color:var(--green);text-align:right}
+.debt-status{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
+.paid-badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:var(--green-dim);color:var(--green)}
+.partial-badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:var(--accent-dim);color:var(--accent)}
+.ibtn{width:28px;height:28px;border-radius:7px;border:.5px solid var(--border2);background:var(--bg3);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ibtn svg{width:13px;height:13px;stroke-width:2;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+.ibtn.cr{color:var(--red);border-color:rgba(248,113,113,.25)}
+.ibtn.cg{color:var(--green);border-color:rgba(74,222,128,.25)}
+.ibtn.cy{color:var(--accent);border-color:rgba(232,200,74,.25)}
+
+/* Person actions bar */
+.person-actions{padding:8px 14px 12px;display:flex;gap:8px}
+.pact-btn{flex:1;padding:9px;border-radius:9px;border:.5px solid var(--border2);background:var(--bg3);color:var(--muted);font-size:12px;font-weight:500;font-family:inherit;cursor:pointer;text-align:center}
+.pact-btn.add{color:var(--accent);border-color:rgba(232,200,74,.3)}
+.pact-btn.pay{color:var(--green);border-color:rgba(74,222,128,.3)}
+.pact-btn.del{color:var(--red);border-color:rgba(248,113,113,.2)}
+
+/* FAB */
+.fab{position:fixed;bottom:calc(16px + var(--safe-b));right:16px;width:52px;height:52px;border-radius:16px;background:var(--accent);color:#000;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(232,200,74,.35);z-index:40}
+.fab svg{width:24px;height:24px;stroke-width:2.2;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
+
+/* Empty */
+.empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:14px;line-height:1.8}
+.empty-ico{font-size:40px;margin-bottom:10px}
+
+/* Bottom sheets */
+.sbg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none}
+.sbg.open{display:block}
+.sheet{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-radius:20px 20px 0 0;border-top:.5px solid var(--border2);z-index:101;padding:0 16px;padding-bottom:calc(16px + var(--safe-b));max-height:92dvh;overflow-y:auto;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1)}
+.sbg.open .sheet{transform:translateY(0)}
+.shandle{width:36px;height:4px;background:var(--border2);border-radius:99px;margin:12px auto 16px}
+.stitle{font-size:17px;font-weight:600;margin-bottom:18px}
+.field{margin-bottom:14px}
+.field label{font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px}
+.field input,.field select,.field textarea{width:100%;padding:13px 14px;background:var(--bg3);border:.5px solid var(--border2);border-radius:10px;color:var(--text);font-size:15px;font-family:inherit;outline:none;-webkit-appearance:none;resize:none}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bfull{width:100%;padding:15px;background:var(--accent);color:#000;border:none;border-radius:12px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;margin-top:4px}
+.bfull.green{background:var(--green)}
+.bcancel{width:100%;padding:13px;background:var(--bg3);color:var(--muted);border:none;border-radius:12px;font-size:14px;font-weight:500;font-family:inherit;cursor:pointer;margin-top:8px}
+.info-box{background:var(--bg3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+.info-box strong{color:var(--text)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hdr">
+    <h1>💸 Dettes</h1>
+    <p id="hsub">Chargement...</p>
+  </div>
+  <div id="content">
+    <div class="mgrid" id="metrics"></div>
+    <div id="persons-list"></div>
+  </div>
+</div>
+
+<button class="fab" onclick="openNewPerson()">
+  <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<!-- Nouvelle personne -->
+<div class="sbg" id="person-bg" onclick="closeSheet('person-bg',event)">
+  <div class="sheet">
+    <div class="shandle"></div>
+    <div class="stitle" id="person-title">Nouvelle personne</div>
+    <div class="field"><label>Prénom / Surnom</label><input type="text" id="p-name" placeholder="ex: Alex, Maman..."/></div>
+    <button class="bfull" onclick="savePerson()">Ajouter</button>
+    <button class="bcancel" onclick="closeSheet('person-bg')">Annuler</button>
+  </div>
+</div>
+
+<!-- Nouvelle dette -->
+<div class="sbg" id="debt-bg" onclick="closeSheet('debt-bg',event)">
+  <div class="sheet">
+    <div class="shandle"></div>
+    <div class="stitle" id="debt-title">Nouvelle avance</div>
+    <div class="info-box" id="debt-info"></div>
+    <div class="field"><label>Description</label><input type="text" id="d-label" placeholder="ex: Produit X, Commande..."/></div>
+    <div class="row2">
+      <div class="field"><label>Prix annoncé (€)</label><input type="number" id="d-price" placeholder="0.00" step="0.01" inputmode="decimal"/></div>
+      <div class="field"><label>Coût réel (€)</label><input type="number" id="d-cost" placeholder="0.00" step="0.01" inputmode="decimal"/></div>
+    </div>
+    <div class="field"><label>Note (optionnel)</label><input type="text" id="d-note" placeholder="ex: livraison le 15..."/></div>
+    <button class="bfull" onclick="saveDebt()">Enregistrer</button>
+    <button class="bcancel" onclick="closeSheet('debt-bg')">Annuler</button>
+  </div>
+</div>
+
+<!-- Remboursement -->
+<div class="sbg" id="pay-bg" onclick="closeSheet('pay-bg',event)">
+  <div class="sheet">
+    <div class="shandle"></div>
+    <div class="stitle">Remboursement</div>
+    <div class="info-box" id="pay-info"></div>
+    <div class="field"><label>Montant reçu (€)</label><input type="number" id="pay-amount" placeholder="0.00" step="0.01" inputmode="decimal"/></div>
+    <button class="bfull green" onclick="savePayment()">Confirmer le remboursement</button>
+    <button class="bcancel" onclick="closeSheet('pay-bg')">Annuler</button>
+  </div>
+</div>
+
+<script>
+const DB = 'dettes_v1';
+let state = { persons: [] };
+let editPersonIdx = null;
+let activePersonId = null;
+let editDebtId = null;
+let payDebtId = null;
+
+function load() {
+  try {
+    const d = localStorage.getItem(DB);
+    if (d) { const s = JSON.parse(d); state.persons = s.persons || []; }
+  } catch(e) {}
+  render();
+}
+function save() { try { localStorage.setItem(DB, JSON.stringify(state)); } catch(e) {} }
+
+function fmtM(n) { return Number(n||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmt(n) { return parseFloat(n||0).toFixed(2); }
+function nowStr() {
+  const n = new Date();
+  return n.toLocaleDateString('fr-FR');
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+// ── Computed ──
+function personStats(p) {
+  let totalDue = 0, totalCost = 0, totalPaid = 0;
+  (p.debts || []).forEach(d => {
+    totalDue += parseFloat(d.price || 0);
+    totalCost += parseFloat(d.cost || 0);
+    totalPaid += parseFloat(d.paid || 0);
+  });
+  const remaining = totalDue - totalPaid;
+  const margin = totalDue - totalCost;
+  return { totalDue, totalCost, totalPaid, remaining, margin };
+}
+
+// ── Render ──
+function render() {
+  renderMetrics();
+  renderPersons();
+  updateHdr();
+}
+
+function updateHdr() {
+  const active = state.persons.filter(p => personStats(p).remaining > 0);
+  document.getElementById('hsub').textContent =
+    `${state.persons.length} personne${state.persons.length!==1?'s':''} · ${active.length} dette${active.length!==1?'s':''} en cours`;
+}
+
+function renderMetrics() {
+  let totalDue = 0, totalCost = 0, totalPaid = 0;
+  state.persons.forEach(p => {
+    const s = personStats(p);
+    totalDue += s.totalDue;
+    totalCost += s.totalCost;
+    totalPaid += s.totalPaid;
+  });
+  const remaining = totalDue - totalPaid;
+  const margin = totalDue - totalCost;
+  document.getElementById('metrics').innerHTML = `
+    <div class="mcard wide"><div class="mlabel">Reste à récupérer</div><div class="mval cy">${fmtM(remaining)} €</div></div>
+    <div class="mcard"><div class="mlabel">Bénéfice potentiel</div><div class="mval cg">+${fmtM(margin)} €</div></div>
+    <div class="mcard"><div class="mlabel">Déjà remboursé</div><div class="mval">${fmtM(totalPaid)} €</div></div>
+  `;
+}
+
+function renderPersons() {
+  const el = document.getElementById('persons-list');
+  if (!state.persons.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-ico">👤</div>Aucune personne.<br>Appuie sur <strong>+</strong> pour en ajouter une.</div>`;
+    return;
+  }
+  // Sort: people with remaining debt first
+  const sorted = [...state.persons].sort((a,b) => personStats(b).remaining - personStats(a).remaining);
+  el.innerHTML = sorted.map(p => personHTML(p)).join('');
+}
+
+function personHTML(p) {
+  const s = personStats(p);
+  const isPaid = s.remaining <= 0 && (p.debts||[]).length > 0;
+  const hasDebts = (p.debts||[]).length > 0;
+  const isOpen = p._open;
+
+  const debtsHTML = (p.debts || []).map(d => debtRowHTML(p.id, d)).join('');
+
+  return `<div class="person-card" id="pc-${p.id}">
+    <div class="person-header" onclick="togglePerson('${p.id}')">
+      <div>
+        <div class="person-name ${isPaid?'person-paid':''}">${p.name}</div>
+        <div class="person-meta">${(p.debts||[]).length} avance${(p.debts||[]).length!==1?'s':''} · remboursé ${fmtM(s.totalPaid)} €</div>
+        <div class="expand-btn">${isOpen?'▲ Réduire':'▼ Détails'}</div>
+      </div>
+      <div class="person-totals">
+        <div class="person-due ${isPaid?'cg':''}">${isPaid?'✓ Soldé':fmtM(s.remaining)+' €'}</div>
+        ${s.margin > 0 ? `<div class="person-margin">+${fmtM(s.margin)} € marge</div>` : ''}
+      </div>
+    </div>
+    <div class="debts-list ${isOpen?'open':''}" id="dl-${p.id}">
+      ${debtsHTML || '<div style="padding:12px 14px;font-size:13px;color:var(--muted)">Aucune avance.</div>'}
+      <div class="person-actions">
+        <button class="pact-btn add" onclick="openNewDebt('${p.id}')">+ Avance</button>
+        ${s.remaining > 0 ? `<button class="pact-btn pay" onclick="openPayment('${p.id}')">💰 Rembours.</button>` : ''}
+        <button class="pact-btn del" onclick="deletePerson('${p.id}')">Supprimer</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function debtRowHTML(personId, d) {
+  const price = parseFloat(d.price || 0);
+  const cost = parseFloat(d.cost || 0);
+  const paid = parseFloat(d.paid || 0);
+  const remaining = price - paid;
+  const margin = price - cost;
+  const isFullyPaid = remaining <= 0;
+  const isPartial = paid > 0 && !isFullyPaid;
+
+  return `<div class="debt-row">
+    <div>
+      <div class="debt-label">${d.label}</div>
+      <div class="debt-note">${d.date}${d.note?' · '+d.note:''}</div>
+      ${isFullyPaid ? '<span class="paid-badge">Remboursé</span>' : isPartial ? `<span class="partial-badge">Partial · reste ${fmtM(remaining)} €</span>` : ''}
+    </div>
+    <div>
+      <div class="debt-amount ${isFullyPaid?'cg':''}">${fmtM(price)} €</div>
+      <div class="debt-cost">Coût : ${fmtM(cost)} €</div>
+      ${margin > 0 ? `<div class="debt-margin">+${fmtM(margin)} €</div>` : ''}
+      <div class="debt-status">
+        <button class="ibtn cy" onclick="openEditDebt('${personId}','${d.id}')" title="Modifier"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="ibtn cr" onclick="deleteDebt('${personId}','${d.id}')" title="Supprimer"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function togglePerson(id) {
+  const p = state.persons.find(x => x.id === id);
+  if (!p) return;
+  p._open = !p._open;
+  render();
+}
+
+// ── Persons CRUD ──
+function openNewPerson() {
+  editPersonIdx = null;
+  document.getElementById('p-name').value = '';
+  document.getElementById('person-title').textContent = 'Nouvelle personne';
+  document.getElementById('person-bg').classList.add('open');
+  setTimeout(() => document.getElementById('p-name').focus(), 300);
+}
+function savePerson() {
+  const name = document.getElementById('p-name').value.trim();
+  if (!name) { alert('Prénom obligatoire.'); return; }
+  if (editPersonIdx !== null) {
+    state.persons[editPersonIdx].name = name;
+  } else {
+    state.persons.push({ id: uid(), name, debts: [], _open: true });
+  }
+  save(); closeSheet('person-bg'); render();
+}
+function deletePerson(id) {
+  const p = state.persons.find(x => x.id === id);
+  if (!confirm(`Supprimer ${p.name} et toutes ses dettes ?`)) return;
+  state.persons = state.persons.filter(x => x.id !== id);
+  save(); render();
+}
+
+// ── Debts CRUD ──
+function openNewDebt(personId) {
+  activePersonId = personId;
+  editDebtId = null;
+  const p = state.persons.find(x => x.id === personId);
+  document.getElementById('debt-title').textContent = `Avance pour ${p.name}`;
+  document.getElementById('debt-info').innerHTML = `<strong>${p.name}</strong> — nouvelle avance`;
+  document.getElementById('d-label').value = '';
+  document.getElementById('d-price').value = '';
+  document.getElementById('d-cost').value = '';
+  document.getElementById('d-note').value = '';
+  document.getElementById('debt-bg').classList.add('open');
+}
+function openEditDebt(personId, debtId) {
+  activePersonId = personId;
+  editDebtId = debtId;
+  const p = state.persons.find(x => x.id === personId);
+  const d = (p.debts || []).find(x => x.id === debtId);
+  if (!d) return;
+  document.getElementById('debt-title').textContent = 'Modifier l\'avance';
+  document.getElementById('debt-info').innerHTML = `<strong>${p.name}</strong> — modification`;
+  document.getElementById('d-label').value = d.label;
+  document.getElementById('d-price').value = d.price;
+  document.getElementById('d-cost').value = d.cost;
+  document.getElementById('d-note').value = d.note || '';
+  document.getElementById('debt-bg').classList.add('open');
+}
+function saveDebt() {
+  const label = document.getElementById('d-label').value.trim();
+  const price = parseFloat(document.getElementById('d-price').value || 0);
+  const cost = parseFloat(document.getElementById('d-cost').value || 0);
+  const note = document.getElementById('d-note').value.trim();
+  if (!label) { alert('Description obligatoire.'); return; }
+  const p = state.persons.find(x => x.id === activePersonId);
+  if (!p) return;
+  if (editDebtId) {
+    const d = p.debts.find(x => x.id === editDebtId);
+    if (d) { d.label = label; d.price = price; d.cost = cost; d.note = note; }
+  } else {
+    p.debts.push({ id: uid(), label, price, cost, note, paid: 0, date: nowStr() });
+  }
+  save(); closeSheet('debt-bg'); render();
+}
+function deleteDebt(personId, debtId) {
+  if (!confirm('Supprimer cette avance ?')) return;
+  const p = state.persons.find(x => x.id === personId);
+  if (!p) return;
+  p.debts = p.debts.filter(d => d.id !== debtId);
+  save(); render();
+}
+
+// ── Payment ──
+function openPayment(personId) {
+  activePersonId = personId;
+  const p = state.persons.find(x => x.id === personId);
+  const s = personStats(p);
+  document.getElementById('pay-info').innerHTML =
+    `<strong>${p.name}</strong><br/>Reste dû : <strong style="color:var(--accent)">${fmtM(s.remaining)} €</strong>`;
+  document.getElementById('pay-amount').value = fmt(s.remaining);
+  document.getElementById('pay-bg').classList.add('open');
+}
+function savePayment() {
+  const amount = parseFloat(document.getElementById('pay-amount').value || 0);
+  if (!amount || amount <= 0) { alert('Montant invalide.'); return; }
+  const p = state.persons.find(x => x.id === activePersonId);
+  if (!p) return;
+  // Distribute payment across unpaid debts (oldest first)
+  let remaining = amount;
+  p.debts.forEach(d => {
+    if (remaining <= 0) return;
+    const due = parseFloat(d.price || 0) - parseFloat(d.paid || 0);
+    if (due <= 0) return;
+    const apply = Math.min(due, remaining);
+    d.paid = parseFloat(d.paid || 0) + apply;
+    remaining -= apply;
+  });
+  save(); closeSheet('pay-bg'); render();
+}
+
+// ── Sheets ──
+function closeSheet(id, e) {
+  if (!e || e.target === document.getElementById(id)) {
+    document.getElementById(id).classList.remove('open');
+  }
+}
+
+load();
+</script>
+</body>
+</html>
