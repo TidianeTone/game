@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRIXIS — Le Paradoxe du Potentiel</title>
+<style>
+:root{
+  --void:#0b0a12;        /* fond abysse */
+  --panel:#151322;
+  --panel2:#1d1930;
+  --ink:#e8e2f0;
+  --dim:#8f86a8;
+  --bleu:#4aa3d8;        /* Analyse */
+  --rouge:#e0483f;       /* Émotion */
+  --noir:#9b6dd6;        /* Ambition (violet-noir grixis) */
+  --or:#d8a94a;
+  --hp:#c93b4e;
+  --block:#5fb0e0;
+}
+*{box-sizing:border-box;margin:0;padding:0;user-select:none}
+body{background:var(--void);color:var(--ink);font-family:Georgia,'Times New Roman',serif;min-height:100vh;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;background:
+  radial-gradient(ellipse 60% 40% at 20% 10%, rgba(74,163,216,.07), transparent),
+  radial-gradient(ellipse 50% 40% at 85% 20%, rgba(224,72,63,.07), transparent),
+  radial-gradient(ellipse 70% 50% at 50% 100%, rgba(155,109,214,.08), transparent);pointer-events:none}
+#app{position:relative;max-width:980px;margin:0 auto;padding:14px}
+h1,h2,h3{font-weight:normal;letter-spacing:.06em}
+.titre{font-size:2.4em;text-align:center;margin-top:40px;background:linear-gradient(90deg,var(--bleu),var(--noir),var(--rouge));-webkit-background-clip:text;background-clip:text;color:transparent}
+.soustitre{text-align:center;color:var(--dim);font-style:italic;margin:8px 0 30px}
+.btn{display:inline-block;background:var(--panel2);border:1px solid var(--dim);color:var(--ink);padding:12px 26px;cursor:pointer;font-family:inherit;font-size:1em;letter-spacing:.05em;transition:all .15s}
+.btn:hover{border-color:var(--or);color:var(--or);transform:translateY(-2px)}
+.btn:disabled{opacity:.35;cursor:default;transform:none}
+.center{text-align:center}
+/* ------ combat layout ------ */
+#topbar{display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid #2a2440;margin-bottom:10px;font-size:.9em;color:var(--dim)}
+#topbar b{color:var(--or)}
+#arena{display:flex;justify-content:space-between;align-items:flex-start;min-height:230px;gap:16px;padding:10px 0}
+.fighter{flex:1;text-align:center;padding:12px;background:var(--panel);border:1px solid #2a2440;border-radius:6px;position:relative;transition:transform .1s}
+.fighter.hit{animation:shake .25s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.portrait{font-size:3.4em;line-height:1.2;filter:drop-shadow(0 0 12px rgba(155,109,214,.4))}
+.fname{font-size:1.05em;margin:4px 0;letter-spacing:.04em}
+.fdesc{font-size:.78em;color:var(--dim);font-style:italic;min-height:2.2em}
+.barwrap{background:#000;border:1px solid #333;height:16px;border-radius:3px;overflow:hidden;margin:6px 10px}
+.bar{height:100%;background:var(--hp);transition:width .3s}
+.hptxt{font-size:.85em}
+.blk{color:var(--block);font-size:.85em;min-height:1.2em}
+.intent{margin-top:6px;font-size:.9em;color:var(--or)}
+.status{font-size:.75em;color:var(--noir);min-height:1.1em}
+/* ------ cartes ------ */
+#handzone{margin-top:8px}
+#energie{text-align:center;font-size:1.05em;margin-bottom:6px}
+#hand{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;min-height:150px}
+.card{width:118px;min-height:150px;background:var(--panel2);border:1px solid #3a3355;border-radius:8px;padding:8px;cursor:pointer;transition:all .12s;position:relative;display:flex;flex-direction:column}
+.card:hover{transform:translateY(-8px) scale(1.04);z-index:5}
+.card.unaff{opacity:.45;cursor:default}
+.card.unaff:hover{transform:none}
+.card .cname{font-size:.82em;letter-spacing:.02em;min-height:2em}
+.card .ccost{position:absolute;top:-8px;left:-8px;width:24px;height:24px;border-radius:50%;background:var(--void);border:1px solid var(--or);color:var(--or);display:flex;align-items:center;justify-content:center;font-size:.85em}
+.card .ctxt{font-size:.72em;color:var(--dim);margin-top:auto;line-height:1.35}
+.card.cB{border-color:var(--bleu);box-shadow:inset 0 0 18px rgba(74,163,216,.12)}
+.card.cR{border-color:var(--rouge);box-shadow:inset 0 0 18px rgba(224,72,63,.12)}
+.card.cN{border-color:var(--noir);box-shadow:inset 0 0 18px rgba(155,109,214,.12)}
+.ctype{font-size:.6em;text-transform:uppercase;letter-spacing:.12em;color:var(--dim)}
+#actions{text-align:center;margin-top:12px}
+#piles{display:flex;justify-content:space-between;color:var(--dim);font-size:.8em;padding:4px 8px}
+#log{max-height:70px;overflow-y:auto;font-size:.78em;color:var(--dim);border-top:1px solid #2a2440;margin-top:8px;padding-top:6px;font-style:italic}
+/* ------ map / events ------ */
+.nodechoice{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+.node{background:var(--panel);border:1px solid #3a3355;padding:18px;width:260px;cursor:pointer;border-radius:6px;transition:all .15s}
+.node:hover{border-color:var(--or);transform:translateY(-3px)}
+.node h3{color:var(--or);font-size:1em;margin-bottom:6px}
+.node p{font-size:.8em;color:var(--dim);line-height:1.4}
+.acte{text-align:center;margin:26px 0 6px;color:var(--dim);letter-spacing:.2em;text-transform:uppercase;font-size:.8em}
+.actetitre{text-align:center;font-size:1.6em;margin-bottom:4px}
+.recompense{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:16px 0}
+.evtxt{max-width:560px;margin:14px auto;line-height:1.6;font-size:.95em;color:var(--ink)}
+.evtxt em{color:var(--dim)}
+.overlay-msg{text-align:center;font-size:1.2em;margin:30px 0;line-height:1.7}
+.small{font-size:.78em;color:var(--dim)}
+.legende{display:flex;gap:20px;justify-content:center;margin:20px 0;font-size:.85em}
+.legende span{padding:4px 10px;border-radius:4px}
+@media(max-width:600px){.portrait{font-size:2.4em}.card{width:31%;min-width:98px}}
+/* ------ couloir ------ */
+#couloir{position:relative;height:240px;margin:24px 0;border:1px solid #2a2440;border-radius:6px;overflow:hidden;
+  background:linear-gradient(180deg,#0b0a12 0%,#151322 55%,#1d1930 55%,#141020 100%)}
+#murs{position:absolute;inset:0 0 45% 0;
+  background:repeating-linear-gradient(90deg,#1d1930 0 46px,#241e3a 46px 48px),repeating-linear-gradient(180deg,transparent 0 26px,#100d1c 26px 28px);
+  animation:scrollmur 1.1s linear infinite;opacity:.9}
+#sol{position:absolute;inset:55% 0 0 0;
+  background:repeating-linear-gradient(90deg,#241e3a 0 60px,#2c2546 60px 62px),repeating-linear-gradient(180deg,#1a1530 0 18px,#120e22 18px 20px);
+  animation:scrollsol .7s linear infinite}
+@keyframes scrollmur{to{background-position:-48px 0,0 0}}
+@keyframes scrollsol{to{background-position:-62px 0,0 0}}
+#torche1,#torche2{position:absolute;top:22%;font-size:1.6em;animation:torchemove 2.4s linear infinite;filter:drop-shadow(0 0 10px rgba(224,150,60,.7))}
+#torche2{animation-delay:-1.2s}
+@keyframes torchemove{from{left:105%}to{left:-8%}}
+#marcheur{position:absolute;left:38%;top:38%;font-size:3.6em;animation:bob .45s ease-in-out infinite alternate;filter:drop-shadow(0 6px 8px #000)}
+@keyframes bob{from{transform:translateY(0) rotate(-2deg)}to{transform:translateY(-9px) rotate(2deg)}}
+#couloirtxt{position:absolute;bottom:8px;width:100%;text-align:center;color:var(--dim);font-style:italic;font-size:.85em}
+#cover{display:block;max-width:100%;border-radius:8px;margin:0 auto 4px;border:1px solid #2a2440}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+/* =====================================================
+   GRIXIS — Le Paradoxe du Potentiel
+   Un roguelike deck-builder sur la vie intérieure de Tidiane.
+   Bleu = Analyse · Rouge = Émotion · Noir(violet) = Ambition
+   ===================================================== */
+const $ = s => document.querySelector(s);
+const app = $("#app");
+const rnd = a => a[Math.floor(Math.random()*a.length)];
+const shuffle = a => {a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+
+/* ---------- CARTES ---------- */
+// c: couleur B/R/N — cost — type atk/def/skill/pow
+const CARDS = {
+  // --- de base ---
+  esquisse:{n:"Esquisse",c:"R",cost:1,t:"atk",dmg:6,txt:"Inflige 6 dégâts. Un trait rapide, sans repentir."},
+  garde:{n:"Recul Analytique",c:"B",cost:1,t:"def",blk:5,txt:"Gagne 5 blocage. Observer avant d'agir."},
+  // --- BLEU / Analyse ---
+  journal:{n:"Journal Intime",c:"B",cost:1,t:"skill",draw:2,txt:"Pioche 2 cartes. 600 pages de recul sur soi."},
+  arbo:{n:"Pensée Arborescente",c:"B",cost:0,t:"skill",draw:1,energy:0,txt:"Pioche 1 carte. Une idée en appelle trois."},
+  meticuleux:{n:"Méticulosité",c:"B",cost:2,t:"def",blk:11,txt:"Gagne 11 blocage. Lent ? Non : profond."},
+  dnb:{n:"Drum & Bass",c:"B",cost:1,t:"pow",pw:"focus",txt:"Pouvoir : pioche +1 carte à chaque tour. 174 BPM de concentration."},
+  scan:{n:"Analyse DSM",c:"B",cost:1,t:"skill",vuln:2,draw:1,txt:"Applique 2 Vulnérable, pioche 1. Diagnostiquer l'adversaire."},
+  photog:{n:"Mémoire Photogénique",c:"B",cost:1,t:"def",blk:6,draw:1,txt:"6 blocage, pioche 1. Des milliers de cartes en tête."},
+  // --- ROUGE / Émotion ---
+  punchline:{n:"Punchline",c:"R",cost:1,t:"atk",dmg:9,txt:"Inflige 9 dégâts. Un seize à la Solaar, direct au foie."},
+  rage:{n:"Pure Rage",c:"R",cost:2,t:"atk",dmg:8,hits:2,txt:"Inflige 8 dégâts ×2. Celle de 2020, canalisée."},
+  hyperfocus:{n:"Hyperfocus",c:"R",cost:2,t:"pow",pw:"force",val:3,txt:"Pouvoir : +3 Force. Quand le sujet t'obsède, rien ne t'arrête."},
+  monster:{n:"Monster Energy",c:"R",cost:0,t:"skill",energyGain:1,hp:-2,txt:"Perds 2 PV, gagne 1 énergie. Caler sa voix avant l'interaction."},
+  flow:{n:"Flow Polyphonique",c:"R",cost:1,t:"atk",dmg:4,perCard:2,txt:"4 dégâts +2 par carte jouée ce tour. Les trois voix dialoguent."},
+  smash:{n:"Wavedash",c:"R",cost:1,t:"atk",dmg:5,blk:4,txt:"5 dégâts, 4 blocage. Réflexes de jeu de combat."},
+  // --- NOIR / Ambition ---
+  pacte:{n:"Pacte Grixis",c:"N",cost:1,t:"atk",dmg:13,hp:-3,txt:"Inflige 13 dégâts, perds 3 PV. La puissance a un prix."},
+  potentiel:{n:"Potentiel Brut",c:"N",cost:3,t:"atk",dmg:24,txt:"Inflige 24 dégâts. Ce qu'ils voient tous en toi."},
+  discipline:{n:"NoFap Arc",c:"N",cost:1,t:"pow",pw:"regen",val:2,txt:"Pouvoir : soigne 2 PV par tour. La discipline comme rituel."},
+  masque:{n:"Masque Social",c:"N",cost:2,t:"def",blk:9,vuln:1,txt:"9 blocage, applique 1 Vulnérable. Registre théâtral, façade parfaite."},
+  sacrifice:{n:"Nuit Blanche",c:"N",cost:0,t:"skill",draw:3,hp:-4,txt:"Pioche 3, perds 4 PV. 5h du matin, encore debout."},
+  revelation:{n:"La Révélation",c:"N",cost:2,t:"skill",heal:8,draw:2,txt:"Soigne 8 PV, pioche 2. Le jour où tu as su ce qui te rend heureux : dessiner."},
+  // --- extension : variété ---
+  draft:{n:"First Pick",c:"B",cost:0,t:"skill",draw:1,blk:3,txt:"Pioche 1, gagne 3 blocage. Lire le draft avant tout le monde."},
+  theorie:{n:"Théorie du Jeu",c:"B",cost:2,t:"skill",blk:8,vuln:2,txt:"8 blocage, 2 Vulnérable. Chaque matchup a une solution."},
+  contre:{n:"Contre-Analyse",c:"B",cost:1,t:"skill",blk:5,weakF:2,txt:"5 blocage, applique 2 Faiblesse. Désamorcer l'attaque avant qu'elle parte."},
+  combo:{n:"True Combo",c:"R",cost:1,t:"atk",dmg:3,hits:3,txt:"Inflige 3 dégâts ×3. Optimisé frame par frame."},
+  seize:{n:"Seize Mesures",c:"R",cost:2,t:"atk",dmg:14,txt:"Inflige 14 dégâts. Le couplet entier, sans respirer."},
+  adrenaline:{n:"Adrénaline",c:"R",cost:0,t:"atk",dmg:4,txt:"Inflige 4 dégâts. Le réflexe avant la pensée."},
+  cendres:{n:"Transmutation",c:"N",cost:1,t:"atk",dmg:7,lifesteal:3,txt:"7 dégâts, soigne 3 PV. Transformer la douleur en matière."},
+  dette:{n:"La Dette",c:"N",cost:0,t:"atk",dmg:11,hp:-4,txt:"Inflige 11 dégâts, perds 4 PV. Tout se paie, plus tard."},
+  obsession:{n:"Obsession",c:"N",cost:3,t:"pow",pw:"energie",txt:"Pouvoir : +1 énergie max chaque tour. Le sujet a pris toute la place."},
+};
+const STARTER = ["esquisse","esquisse","esquisse","esquisse","garde","garde","garde","garde","journal","punchline"];
+const POOL = ["journal","arbo","meticuleux","dnb","scan","photog","punchline","rage","hyperfocus","monster","flow","smash","pacte","potentiel","discipline","masque","sacrifice","revelation","draft","theorie","contre","combo","seize","adrenaline","cendres","dette","obsession"];
+
+/* ---------- ENNEMIS ---------- */
+// intents: liste cyclique {a:atk dmg}|{b:block}|{s:status vuln/weak self-buff}
+const FOES = {
+  procrastination:{n:"La Procrastination",e:"🌀",hp:32,d:"« Demain. Tu le feras demain. »",
+    moves:[{a:6,l:"Reporter (6)"},{b:6,l:"S'enliser (+6 bloc)"},{a:9,l:"Spirale (9)"}]},
+  doute:{n:"Le Syndrome de l'Imposteur",e:"🎭",hp:28,d:"« Tu n'es pas un vrai artiste. »",
+    moves:[{a:5,l:"Comparaison (5)"},{weak:2,l:"Dévaloriser (Faiblesse)"},{a:8,l:"Verdict (8)"}]},
+  ecran:{n:"L'Écran Infini",e:"📱",hp:35,d:"Vidéos de Coney à 4h du matin.",
+    moves:[{a:4,hits:2,l:"Scroll (4×2)"},{a:7,l:"Autoplay (7)"},{b:8,l:"Notification (+8 bloc)"}]},
+  limerence:{n:"La Limerence",e:"💔",hp:38,d:"L'amour qu'il faut mériter, encore.",
+    moves:[{a:7,l:"Obsession (7)"},{weak:2,l:"Idéaliser (Faiblesse)"},{a:11,l:"Rejet (11)"}]},
+  fumee:{n:"La Fumée",e:"💨",hp:40,d:"Le cycle que tu connais par cœur.",
+    moves:[{a:6,l:"Habitude (6)"},{a:6,l:"Habitude (6)"},{b:10,heal:4,l:"Rechute (+bloc, +PV)"}]},
+  apathie:{n:"L'Apathie",e:"🪨",hp:45,d:"« À quoi bon. Reste assis. »",
+    moves:[{b:9,l:"Inertie (+9 bloc)"},{a:9,l:"Poids (9)"},{a:5,weak:1,l:"Engourdir (5 + Faiblesse)"}]},
+  precarite:{n:"La Précarité",e:"🕳️",hp:36,d:"Un paquet de pâtes par jour, 2021.",
+    moves:[{a:8,l:"Fin de mois (8)"},{a:5,l:"Facture (5)"},{a:10,l:"Découvert (10)"}]},
+  // ---- BOSS ----
+  perfection:{n:"LE PERFECTIONNISME PARALYSANT",e:"🗿",hp:60,boss:1,d:"« Si ce n'est pas parfait, ne le montre pas. Ne le commence même pas. »",
+    moves:[{b:12,l:"Standard Impossible (+12 bloc)"},{a:10,l:"Critique (10)"},{a:7,weak:2,l:"Paralysie (7 + Faiblesse)"},{a:14,l:"Jugement Final (14)"}]},
+  cycles:{n:"LE ROI DES CYCLES",e:"♾️",hp:75,boss:1,d:"Hyperfocus, obsession, épuisement, abandon. Recommencer.",
+    moves:[{a:9,l:"Montée (9)"},{a:12,l:"Pic (12)"},{b:10,heal:6,l:"Rechute (+bloc, +6 PV)"},{a:6,hits:2,l:"Rechute ×2 (6×2)"}]},
+  paradoxe:{n:"LE PARADOXE DU POTENTIEL",e:"👁️",hp:95,boss:1,d:"L'artisan contre l'artiste. Tout ce que tu pourrais être, dressé contre ce que tu es.",
+    moves:[{a:11,l:"Attentes (11)"},{b:14,l:"Promesses (+14 bloc)"},{a:8,weak:2,l:"Regard des Autres (8 + Faiblesse)"},{a:16,l:"Gâchis (16)"},{vulnSelf:0,a:7,hits:2,l:"Fissure (7×2)"}]},
+};
+
+/* ---------- ACTES ---------- */
+const ACTS = [
+  {num:"Acte I",titre:"2021 — La Précarité",desc:"Pôle emploi, pâtes, et une vocation trouvée. Il faut survivre pour créer.",
+   foes:["procrastination","doute","precarite"],boss:"perfection"},
+  {num:"Acte II",titre:"2024 — Les Cycles",desc:"Magic, formation data, les nuits qui glissent. Les boucles se referment.",
+   foes:["ecran","limerence","fumee"],boss:"cycles"},
+  {num:"Acte III",titre:"2026 — Le Paradoxe",desc:"Face au miroir. L'apathie d'un côté, le potentiel de l'autre.",
+   foes:["apathie","fumee","limerence","ecran"],boss:"paradoxe"},
+];
+
+/* ---------- ÉVÉNEMENTS ---------- */
+const EVENTS = [
+  {t:"L'Appel de Dija",e:"📞",
+   txt:"Dija décroche. Elle a investi en toi — pas pour te mettre la pression, mais parce qu'elle y croit. « Prends ton temps, mais prends-le vraiment. »",
+   choices:[{l:"Accepter le soutien (soigne 15 PV)",fx:g=>{heal(15)}},
+            {l:"Promettre de faire mieux (retire une carte du deck)",fx:g=>{return "purge"}}]},
+  {t:"Session Dessin",e:"✏️",
+   txt:"Le pinceau numérique glisse. Pas de Pinterest, pas de références : juste toi et la forme. Tu te souviens pourquoi tu as commencé.",
+   choices:[{l:"Étudier Sinlaire (ajoute « Méticulosité »)",fx:g=>{g.deck.push("meticuleux")}},
+            {l:"Dessiner d'instinct (ajoute « Esquisse » améliorée : Punchline)",fx:g=>{g.deck.push("punchline")}}]},
+  {t:"Draft chez les potes",e:"🃏",
+   txt:"Moha, Emre, les boosters s'ouvrent. Tu expliques pourquoi Grixis, c'est toi : le bleu qui analyse, le rouge qui ressent, le noir qui veut plus.",
+   choices:[{l:"First pick la bombe (carte rare au choix)",fx:g=>{return "rare"}},
+            {l:"Forcer la synergie (pioche +1 PV max… non, +6 PV max)",fx:g=>{g.maxhp+=6;heal(6)}}]},
+  {t:"Le Studio",e:"🎙️",
+   txt:"Le beat tourne. Trois voix en toi veulent le micro : celle qui compte les syllabes, celle qui saigne, celle qui vise le sommet.",
+   choices:[{l:"Poser le seize (ajoute « Flow Polyphonique »)",fx:g=>{g.deck.push("flow")}},
+            {l:"Réécrire encore (retire une carte du deck)",fx:g=>{return "purge"}}]},
+  {t:"Message de Johanne",e:"💬",
+   txt:"« La nuit et le jour entre une personne qui dit qu'elle t'aime et une personne qui t'aime pour de vrai. » Elle demande juste comment tu vas.",
+   choices:[{l:"Répondre honnêtement (soigne 10 PV, +4 PV max)",fx:g=>{g.maxhp+=4;heal(10)}},
+            {l:"Envoyer un meme (pioche « Wavedash »)",fx:g=>{g.deck.push("smash")}}]},
+  {t:"La Salle",e:"🏋️",
+   txt:"Les avant-bras tirent. Pousser malgré la fatigue : tu sais que c'est là que l'énergie revient, pas dans l'évitement.",
+   choices:[{l:"Push (perds 5 PV, ajoute « Hyperfocus »)",fx:g=>{dmgP(5);g.deck.push("hyperfocus")}},
+            {l:"Récupération active (soigne 12 PV)",fx:g=>{heal(12)}}]},
+];
+
+/* ---------- ÉTAT ---------- */
+let G = null;
+function newGame(){
+  G = {maxhp:60,hp:60,deck:STARTER.slice(),act:0,step:0,gold:0,
+       screen:"map",usedEvents:[]};
+  screenAct();
+}
+
+/* ---------- HELPERS ---------- */
+function heal(n){G.hp=Math.min(G.maxhp,G.hp+n);}
+function dmgP(n){G.hp=Math.max(0,G.hp-n);}
+function cardHTML(id,click){
+  const c=CARDS[id];
+  return `<div class="card c${c.c}" ${click?`onclick="${click}"`:""}>
+    <div class="ccost">${c.cost}</div>
+    <div class="cname">${c.n}</div>
+    <div class="ctype">${{atk:"Attaque",def:"Défense",skill:"Compétence",pow:"Pouvoir"}[c.t]}</div>
+    <div class="ctxt">${c.txt}</div></div>`;
+}
+
+/* ---------- ÉCRANS ---------- */
+function screenTitle(){
+  app.innerHTML = `
+  <img id="cover" src="cover.png" alt="" onerror="this.remove()">
+  <h1 class="titre">GRIXIS</h1>
+  <div class="soustitre">Le Paradoxe du Potentiel — un roguelike sur la vie de Tidiane</div>
+  <div class="overlay-msg">Trois couleurs. Trois voix.<br>
+  <span style="color:var(--bleu)">L'Analyse</span> qui dissèque tout, y compris elle-même.<br>
+  <span style="color:var(--rouge)">L'Émotion</span> qui brûle en privé.<br>
+  <span style="color:var(--noir)">L'Ambition</span> qui refuse le gâchis.<br><br>
+  <span class="small">Traverse trois époques. Affronte les démons documentés dans 600 pages de journal.<br>
+  Construis ton deck. Atteins l'authenticité.</span></div>
+  <div class="legende">
+    <span style="border:1px solid var(--bleu)">🔵 Bleu : pioche & blocage</span>
+    <span style="border:1px solid var(--rouge)">🔴 Rouge : dégâts & tempo</span>
+    <span style="border:1px solid var(--noir)">🟣 Noir : puissance à prix de sang</span>
+  </div>
+  <div class="center"><button class="btn" onclick="newGame()">Commencer la run</button></div>
+  <p class="center small" style="margin-top:26px">Cliquer une carte pour la jouer · Fin du tour quand tu veux · Vulnérable = +50% dégâts subis · Faiblesse = -25% dégâts infligés</p>`;
+}
+
+function screenAct(){
+  const A=ACTS[G.act];
+  buildMap();
+  app.innerHTML = `
+  <div class="acte">${A.num}</div>
+  <h2 class="actetitre">${A.titre}</h2>
+  <p class="center small">${A.desc}</p>
+  <div class="center" style="margin-top:24px"><button class="btn" onclick="showMap()">Voir la carte</button></div>
+  ${statusBar()}`;
+}
+
+function statusBar(){
+  return `<div id="topbar" style="margin-top:30px;border-top:1px solid #2a2440;border-bottom:none">
+  <span>❤️ <b>${G.hp}/${G.maxhp}</b></span>
+  <span>${ACTS[G.act].num} — étape ${G.step}/5</span>
+  <span>🃏 deck : <b>${G.deck.length}</b> <a href="#" style="color:var(--dim)" onclick="voirDeck();return false">(voir)</a></span></div>`;
+}
+function voirDeck(){
+  app.innerHTML = `<h2 class="actetitre">Ton deck</h2>
+  <div class="recompense">${G.deck.map(id=>cardHTML(id)).join("")}</div>
+  <div class="center"><button class="btn" onclick="showMap()">Retour à la carte</button></div>`;
+}
+
+/* ---------- PROGRESSION : CARTE ---------- */
+const AMBIANCES=[
+  ["Les néons de Pôle emploi grésillent au loin…","L'odeur des pâtes du soir. Encore.","Un carnet de croquis dépasse de ta poche."],
+  ["Un booster de Magic traîne sur le sol.","4h47. Tu devrais dormir.","Le beat tourne en boucle dans ta tête."],
+  ["Le miroir au bout du couloir te regarde.","Chaque pas résonne comme une page de journal.","Quelque part, une toile blanche attend."]];
+
+// génère la carte de l'acte : 5 rangées de 2-3 nœuds + boss
+function buildMap(){
+  const A=ACTS[G.act];
+  const rows=[];
+  for(let r=0;r<5;r++){
+    const n = 2+Math.floor(Math.random()*2); // 2-3 nœuds
+    const row=[];
+    for(let i=0;i<n;i++){
+      let type;
+      const roll=Math.random();
+      if(r===0) type = roll<0.7?"combat":"event";
+      else if(r===4) type = roll<0.5?"repos":"event"; // souffler avant le boss
+      else type = roll<0.55?"combat":(roll<0.85?"event":"repos");
+      const node={type,edges:[]};
+      if(type==="combat") node.foe=rnd(A.foes);
+      if(type==="event"){
+        const pool=EVENTS.map((e,ix)=>ix).filter(ix=>!G.usedEvents.includes(ix));
+        node.ev = pool.length?rnd(pool):-1;
+        if(node.ev===-1){node.type="combat";node.foe=rnd(A.foes);}
+      }
+      row.push(node);
+    }
+    rows.push(row);
+  }
+  // connexions : chaque nœud → 1-2 nœuds de la rangée suivante (proches, sans croisements sauvages)
+  for(let r=0;r<4;r++){
+    const cur=rows[r], nxt=rows[r+1];
+    cur.forEach((node,i)=>{
+      const target=Math.min(nxt.length-1, Math.round(i*(nxt.length-1)/Math.max(1,cur.length-1)));
+      node.edges.push(target);
+      if(Math.random()<0.5){
+        const alt=target+(Math.random()<0.5?-1:1);
+        if(alt>=0&&alt<nxt.length&&!node.edges.includes(alt)) node.edges.push(alt);
+      }
+    });
+    // s'assurer que chaque nœud suivant est atteignable
+    nxt.forEach((_,j)=>{ if(!cur.some(n=>n.edges.includes(j))) rnd(cur).edges.push(j); });
+  }
+  rows[4].forEach(n=>n.edges=[0]); // tout mène au boss
+  G.map=rows; G.row=-1; G.pos=0;
+}
+
+const NODE_ICON={combat:"⚔️",event:"✨",repos:"🛏️",boss:"👁️"};
+function nodeXY(r,i,count){
+  const W=920,H=380;
+  const x=70+r*(W-180)/5;
+  const y=60+(i+0.5)*(H-80)/count;
+  return [x,y];
+}
+function showMap(){
+  const A=ACTS[G.act];
+  const W=920,H=380;
+  let svg="";
+  // arêtes
+  for(let r=0;r<5;r++){
+    G.map[r].forEach((node,i)=>{
+      const [x1,y1]=nodeXY(r,i,G.map[r].length);
+      node.edges.forEach(j=>{
+        const [x2,y2]= r<4 ? nodeXY(r+1,j,G.map[r+1].length) : [W-70,H/2];
+        const active = (r===G.row && i===G.pos);
+        svg+=`<path d="M${x1} ${y1} C ${x1+60} ${y1}, ${x2-60} ${y2}, ${x2} ${y2}" fill="none"
+          stroke="${active?"#d8a94a":"#3a3355"}" stroke-width="${active?2.5:1.5}" stroke-dasharray="5 6"/>`;
+      });
+    });
+  }
+  // nœuds
+  for(let r=0;r<5;r++){
+    G.map[r].forEach((node,i)=>{
+      const [x,y]=nodeXY(r,i,G.map[r].length);
+      const isHere = r===G.row && i===G.pos;
+      const reachable = (G.row===-1 && r===0) || (r===G.row+1 && G.row>=0 && G.map[G.row][G.pos].edges.includes(i));
+      const done = r<G.row || (r===G.row);
+      const tip = node.type==="combat"?FOES[node.foe].n : node.type==="event"?EVENTS[node.ev].t : "Repos — soigner ou méditer";
+      svg+=`<g ${reachable?`class="mnode-go" onclick="enterNode(${r},${i})"`:""} style="cursor:${reachable?"pointer":"default"}">
+        <circle cx="${x}" cy="${y}" r="22" fill="${isHere?"#2c2546":"#151322"}"
+          stroke="${reachable?"#d8a94a":done?"#5a5375":"#3a3355"}" stroke-width="${reachable?2.5:1.5}"
+          opacity="${r<G.row?0.35:1}">${reachable?`<animate attributeName="r" values="22;25;22" dur="1.4s" repeatCount="indefinite"/>`:""}</circle>
+        <text x="${x}" y="${y+6}" text-anchor="middle" font-size="18" opacity="${r<G.row?0.35:1}">${isHere?"🚶🏿":NODE_ICON[node.type]}</text>
+        <title>${tip}</title></g>`;
+    });
+  }
+  // boss
+  const reachBoss = G.row===4;
+  svg+=`<g ${reachBoss?`onclick="enterBoss()"`:""} style="cursor:${reachBoss?"pointer":"default"}">
+    <circle cx="${W-70}" cy="${H/2}" r="32" fill="#1d1024" stroke="${reachBoss?"#e0483f":"#5a2a3a"}" stroke-width="${reachBoss?3:2}">
+    ${reachBoss?`<animate attributeName="r" values="32;36;32" dur="1.2s" repeatCount="indefinite"/>`:""}</circle>
+    <text x="${W-70}" y="${H/2+8}" text-anchor="middle" font-size="26">${FOES[A.boss].e}</text>
+    <title>${FOES[A.boss].n}</title></g>`;
+  app.innerHTML=`<div class="acte">${A.num} — ${A.titre}</div>
+  <p class="center small">Clique un nœud doré pour avancer. ⚔️ combat · ✨ événement · 🛏️ repos · survole pour les détails.</p>
+  <svg viewBox="0 0 ${W} ${H}" style="width:100%;background:var(--panel);border:1px solid #2a2440;border-radius:6px">${svg}</svg>
+  ${statusBar()}`;
+}
+let PENDING=null;
+function enterNode(r,i){
+  G.row=r; G.pos=i; G.step=r+1;
+  const node=G.map[r][i];
+  PENDING=()=>{ 
+    if(node.type==="combat") startCombat(node.foe);
+    else if(node.type==="event") startEvent(node.ev);
+    else screenRepos();
+  };
+  couloir();
+}
+function enterBoss(){
+  G.step=5;
+  PENDING=()=>startCombat(ACTS[G.act].boss);
+  couloir();
+}
+function couloir(){
+  app.innerHTML=`<div id="couloir">
+    <div id="murs"></div><div id="sol"></div>
+    <span id="torche1">🔥</span><span id="torche2">🔥</span>
+    <span id="marcheur">🚶🏿</span>
+    <div id="couloirtxt">${rnd(AMBIANCES[G.act])}</div>
+  </div>${statusBar()}`;
+  setTimeout(()=>{const f=PENDING;PENDING=null;f&&f();}, 2200);
+}
+function screenRepos(){
+  app.innerHTML=`<div class="center" style="font-size:3em;margin-top:20px">🛏️</div>
+  <h2 class="actetitre">Un moment pour soi</h2>
+  <div class="evtxt center">Pas de démon ici. Juste toi, ton carnet, et le silence.</div>
+  <div class="center">
+    <button class="btn" style="display:block;margin:10px auto" onclick="heal(Math.floor(G.maxhp*0.3));showMap()">Dormir vraiment (soigne 30% PV)</button>
+    <button class="btn" style="display:block;margin:10px auto" onclick="reposPurge()">Relire le journal (retire une carte)</button>
+  </div>${statusBar()}`;
+}
+function reposPurge(){ _afterPurge="map"; screenPurge(); }
+
+/* ---------- ÉVÉNEMENTS ---------- */
+function startEvent(i){
+  G.usedEvents.push(i);
+  const E=EVENTS[i];
+  app.innerHTML=`<div class="center" style="font-size:3em;margin-top:20px">${E.e}</div>
+  <h2 class="actetitre">${E.t}</h2>
+  <div class="evtxt">${E.txt}</div>
+  <div class="center" id="evc">${E.choices.map((c,j)=>`<button class="btn" style="display:block;margin:10px auto" onclick="evChoose(${i},${j})">${c.l}</button>`).join("")}</div>
+  ${statusBar()}`;
+}
+function evChoose(i,j){
+  const r=EVENTS[i].choices[j].fx(G);
+  if(r==="purge"){ _afterPurge="map"; screenPurge(); return; }
+  if(r==="rare"){ screenReward(["potentiel","revelation","dnb"]); return; }
+  showMap();
+}
+let _afterPurge="map";
+function screenPurge(){
+  app.innerHTML=`<h2 class="actetitre">Retirer une carte</h2>
+  <p class="center small">Lâcher prise sur un réflexe. Clique la carte à supprimer définitivement.</p>
+  <div class="recompense">${G.deck.map((id,k)=>cardHTML(id,`purge(${k})`)).join("")}</div>`;
+}
+function purge(k){ G.deck.splice(k,1); showMap(); }
+
+/* ---------- COMBAT ---------- */
+let C=null; // état combat
+function startCombat(foeId){
+  const F=FOES[foeId];
+  C={foe:{...F,hp:F.hp,maxhp:F.hp,blk:0,mv:0,vuln:0},
+     p:{blk:0,force:0,weak:0,focus:0,regen:0},
+     draw:shuffle(G.deck.slice()),hand:[],discard:[],energy:3,maxEnergy:3,
+     played:0,log:[]};
+  drawCards(5);
+  renderCombat();
+}
+function drawCards(n){
+  for(let i=0;i<n;i++){
+    if(!C.draw.length){ if(!C.discard.length) return; C.draw=shuffle(C.discard); C.discard=[]; }
+    C.hand.push(C.draw.pop());
+  }
+}
+function log(m){C.log.unshift(m); if(C.log.length>6)C.log.pop();}
+function foeIntent(){
+  const m=C.foe.moves[C.foe.mv % C.foe.moves.length];
+  return m;
+}
+function intentTxt(){
+  const m=foeIntent();
+  let s=m.l;
+  if(m.a){let d=m.a; if(C.foe.weak)d=Math.floor(d*0.75); if(C.p.vulnP){}  }
+  return "Intention : "+s;
+}
+function renderCombat(){
+  const F=C.foe;
+  app.innerHTML=`
+  <div id="topbar"><span>${ACTS[G.act].num}${F.boss?" — BOSS":""}</span><span>${F.boss?"⚠️ "+ACTS[G.act].titre:""}</span><span>🃏 <a href="#" style="color:var(--dim)" onclick="return false">pioche ${C.draw.length} / défausse ${C.discard.length}</a></span></div>
+  <div id="arena">
+    <div class="fighter" id="fP">
+      <div class="portrait">🧑🏿‍🎨</div>
+      <div class="fname">Tidiane</div>
+      <div class="fdesc">Obsessional intellectual. Grixis de cœur.</div>
+      <div class="barwrap"><div class="bar" style="width:${G.hp/G.maxhp*100}%"></div></div>
+      <div class="hptxt">❤️ ${G.hp}/${G.maxhp}</div>
+      <div class="blk">${C.p.blk?"🛡️ "+C.p.blk:""}</div>
+      <div class="status">${C.p.force?`💪 Force ${C.p.force} `:""}${C.p.weak?`😮‍💨 Faiblesse ${C.p.weak} `:""}${C.p.focus?`🎧 Focus `:""}${C.p.regen?`🌱 Régén ${C.p.regen}`:""}</div>
+    </div>
+    <div class="fighter" id="fF">
+      <div class="portrait">${F.e}</div>
+      <div class="fname">${F.n}</div>
+      <div class="fdesc">${F.d}</div>
+      <div class="barwrap"><div class="bar" style="width:${F.hp/F.maxhp*100}%"></div></div>
+      <div class="hptxt">❤️ ${F.hp}/${F.maxhp}</div>
+      <div class="blk">${F.blk?"🛡️ "+F.blk:""}</div>
+      <div class="status">${F.vuln?`🎯 Vulnérable ${F.vuln} `:""}${F.weak?`😮‍💨 Faiblesse ${F.weak}`:""}</div>
+      <div class="intent">${intentLabel()}</div>
+    </div>
+  </div>
+  <div id="handzone">
+    <div id="energie">⚡ Énergie : <b>${C.energy}/${C.maxEnergy}</b></div>
+    <div id="hand">${C.hand.map((id,k)=>{
+      const c=CARDS[id];
+      const aff=c.cost<=C.energy;
+      return `<div class="card c${c.c} ${aff?"":"unaff"}" ${aff?`onclick="playCard(${k})"`:""}>
+        <div class="ccost">${c.cost}</div><div class="cname">${c.n}</div>
+        <div class="ctype">${{atk:"Attaque",def:"Défense",skill:"Compétence",pow:"Pouvoir"}[c.t]}</div>
+        <div class="ctxt">${c.txt}</div></div>`;}).join("")}</div>
+    <div id="actions"><button class="btn" onclick="endTurn()">Fin du tour</button></div>
+    <div id="log">${C.log.map(l=>"• "+l).join("<br>")}</div>
+  </div>`;
+}
+function intentLabel(){
+  const m=foeIntent();
+  let s=m.l;
+  if(m.a && C.foe.weak) s+=" (affaibli)";
+  return "⟶ "+s;
+}
+function playCard(k){
+  const id=C.hand[k], c=CARDS[id];
+  if(c.cost>C.energy) return;
+  C.energy-=c.cost;
+  C.hand.splice(k,1);
+  C.played++;
+  // effets
+  if(c.t==="atk"){
+    let base=c.dmg + (c.perCard? c.perCard*(C.played-1):0) + C.p.force;
+    if(C.p.weak) base=Math.floor(base*0.75);
+    const hits=c.hits||1;
+    for(let h=0;h<hits;h++) hitFoe(base);
+    if(c.blk) C.p.blk+=c.blk;
+  }
+  if(c.hp&&c.hp<0) dmgP(-c.hp);
+  if(c.t==="def"){ C.p.blk+=c.blk||0; }
+  if(c.blk&&c.t!=="atk"&&c.t!=="def") C.p.blk+=c.blk;
+  if(c.draw) drawCards(c.draw);
+  if(c.vuln) C.foe.vuln+=c.vuln;
+  if(c.weakF) C.foe.weak+=c.weakF;
+  if(c.lifesteal) heal(c.lifesteal);
+  if(c.energyGain) C.energy+=c.energyGain;
+  if(c.heal) heal(c.heal);
+  if(c.t==="pow"){
+    if(c.pw==="focus") C.p.focus=1;
+    if(c.pw==="force") C.p.force+=c.val;
+    if(c.pw==="regen") C.p.regen+=c.val;
+    if(c.pw==="energie") C.maxEnergy++;
+  } else {
+    C.discard.push(id);
+  }
+  log(`Tu joues ${c.n}.`);
+  if(G.hp<=0){ return defeat(); }
+  if(C.foe.hp<=0){ return victory(); }
+  renderCombat();
+  $("#fF")&&C.lastHit&&$("#fF").classList.add("hit");
+}
+function hitFoe(d){
+  if(C.foe.vuln) d=Math.floor(d*1.5);
+  const abs=Math.min(C.foe.blk,d);
+  C.foe.blk-=abs; d-=abs;
+  C.foe.hp-=d;
+  if(d>0) log(`${d} dégâts infligés.`);
+}
+function endTurn(){
+  // défausse main
+  C.discard.push(...C.hand.filter(id=>CARDS[id].t!=="pow"));
+  C.hand=[];
+  // tour ennemi
+  C.foe.blk=0;
+  const m=foeIntent(); C.foe.mv++;
+  if(m.b) C.foe.blk+=m.b;
+  if(m.heal) C.foe.hp=Math.min(C.foe.maxhp,C.foe.hp+m.heal);
+  if(m.weak) C.p.weak+=m.weak;
+  if(m.a){
+    let d=m.a; if(C.foe.weak) d=Math.floor(d*0.75);
+    const hits=m.hits||1;
+    for(let h=0;h<hits;h++){
+      let dd=d;
+      const abs=Math.min(C.p.blk,dd); C.p.blk-=abs; dd-=abs;
+      if(dd>0){ dmgP(dd); log(`${C.foe.n} inflige ${dd}.`); }
+      else log(`Ton blocage absorbe tout.`);
+    }
+  } else log(`${C.foe.n} : ${m.l}`);
+  // decay statuts
+  if(C.foe.vuln)C.foe.vuln--;
+  if(C.foe.weak)C.foe.weak--;
+  if(C.p.weak)C.p.weak--;
+  if(G.hp<=0) return defeat();
+  // nouveau tour joueur
+  C.p.blk=0;
+  C.energy=C.maxEnergy;
+  C.played=0;
+  if(C.p.regen) heal(C.p.regen);
+  drawCards(5+(C.p.focus?1:0));
+  renderCombat();
+}
+
+/* ---------- VICTOIRE / DÉFAITE ---------- */
+function victory(){
+  const wasBoss=C.foe.boss;
+  heal(wasBoss?12:4);
+  if(wasBoss){
+    G.act++;
+    if(G.act>=ACTS.length) return screenWin();
+    app.innerHTML=`<div class="overlay-msg">💥 <b>${C.foe.n}</b> se dissout.<br>
+    <span class="small">Pas vaincu pour toujours — les démons documentés reviennent. Mais aujourd'hui, tu as gagné.</span><br><br>
+    Soin de 12 PV.</div>
+    <div class="center"><button class="btn" onclick="rewardThenAct()">Choisir une récompense</button></div>`;
+  } else {
+    app.innerHTML=`<div class="overlay-msg">⚔️ <b>${C.foe.n}</b> recule.<br><span class="small">+4 PV. Une page de plus au journal.</span></div>
+    <div class="center"><button class="btn" onclick="screenReward()">Choisir une récompense</button></div>`;
+  }
+}
+function rewardThenAct(){ screenReward(null,true); }
+function screenReward(fixed,thenAct){
+  const opts=fixed||shuffle(POOL).slice(0,3);
+  app.innerHTML=`<h2 class="actetitre">Ajoute une carte à ton deck</h2>
+  <div class="recompense">${opts.map(id=>cardHTML(id,`takeCard('${id}',${!!thenAct})`)).join("")}</div>
+  <div class="center"><button class="btn" onclick="${thenAct?"screenAct()":"showMap()"}">Passer</button></div>`;
+}
+function takeCard(id,thenAct){
+  G.deck.push(id);
+  if(thenAct) screenAct(); else showMap();
+}
+function defeat(){
+  app.innerHTML=`<div class="center" style="font-size:3em;margin-top:30px">🥀</div>
+  <h2 class="actetitre">La run s'arrête ici</h2>
+  <div class="evtxt center">Tombé face à <b>${C.foe.n}</b>, ${ACTS[G.act].titre.toLowerCase()}.<br><br>
+  <em>« Je regarde Tokyo Revengers, où le héros remonte le temps pour corriger sa vie. »</em><br>
+  Toi aussi, tu peux recommencer. C'est tout le principe du roguelike — et du journal.</div>
+  <div class="center"><button class="btn" onclick="newGame()">Nouvelle run</button>
+  <button class="btn" onclick="screenTitle()">Menu</button></div>`;
+}
+function screenWin(){
+  app.innerHTML=`<div class="center" style="font-size:3.4em;margin-top:26px">🎨</div>
+  <h1 class="titre" style="font-size:1.9em">L'AUTHENTICITÉ</h1>
+  <div class="evtxt center">Le Paradoxe du Potentiel s'effondre — non pas détruit, mais <b>accepté</b>.<br><br>
+  L'artisan et l'artiste ne sont pas ennemis. L'Analyse, l'Émotion et l'Ambition ne sont pas trois voix qui se battent pour le micro : c'est un morceau polyphonique.<br><br>
+  <em>« Mais qu'est-ce qui me rend heureux ? »</em><br>
+  Tu connais la réponse depuis longtemps. Elle tient en un mot : <span style="color:var(--or)">dessiner</span>.<br><br>
+  <span class="small">Deck final : ${G.deck.length} cartes · PV restants : ${G.hp}/${G.maxhp}</span></div>
+  <div class="center"><button class="btn" onclick="newGame()">Nouvelle run</button>
+  <button class="btn" onclick="screenTitle()">Menu</button></div>`;
+}
+
+screenTitle();
+</script>
+</body>
+</html>
