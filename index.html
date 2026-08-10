@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emploi Toulouse — Agrégateur</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div class="brand-text">
+        <h1>Emploi&nbsp;Toulouse</h1>
+        <p>API France&nbsp;Travail + Meteojob, réunis</p>
+      </div>
+    </div>
+  </header>
+
+  <section class="search">
+    <input id="keyword" type="text"
+           placeholder="Intitulé du poste — ex. développeur, comptable…"
+           autocomplete="off" />
+    <button id="searchBtn" class="solid-btn" type="button">Rechercher</button>
+  </section>
+
+  <section class="filters">
+    <label class="chk"><input type="checkbox" id="srcFT" checked /> France Travail</label>
+    <label class="chk"><input type="checkbox" id="srcADZ" checked /> Adzuna</label>
+    <label class="chk"><input type="checkbox" id="srcMJ" checked /> Meteojob</label>
+    <span id="statusLine" class="status-line"></span>
+  </section>
+
+  <main id="results" class="results"></main>
+
+  <div id="emptyState" class="empty">
+    <p>Lance une recherche pour voir les offres à Toulouse remonter ici.</p>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

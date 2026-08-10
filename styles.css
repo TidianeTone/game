@@ -1,0 +1,194 @@
+/* ---- Palette ancrée dans Toulouse : la ville rose, sa brique ---- */
+:root {
+  --plaster:      #f7f2ee;  /* fond, enduit clair */
+  --plaster-deep: #efe6df;
+  --brick:        #b5495b;  /* brique rose foncée, couleur signature */
+  --brick-dim:    #9c3e4e;
+  --aubergine:    #2e2230;  /* encre, texte principal */
+  --slate:        #6b5d63;  /* texte secondaire */
+  --line:         #e3d7ce;
+  --ft:           #2f6f4e;  /* vert France Travail */
+  --ft-bg:        #e2f1e8;
+  --mj:           #1f5f8b;  /* bleu Meteojob */
+  --mj-bg:        #e2eef7;
+  --adz:          #a2591b;  /* ocre Adzuna */
+  --adz-bg:       #f6e9d8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--plaster);
+  color: var(--aubergine);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+
+/* ---- Barre du haut ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 28px;
+  background: var(--aubergine);
+  color: var(--plaster);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-mark {
+  width: 34px; height: 34px;
+  border-radius: 7px;
+  background:
+    linear-gradient(135deg, var(--brick) 0%, var(--brick-dim) 100%);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.12);
+  position: relative;
+}
+.brand-mark::after {
+  /* clin d'œil aux assises de brique */
+  content: "";
+  position: absolute; inset: 7px;
+  background:
+    repeating-linear-gradient(0deg,
+      rgba(255,255,255,0.28) 0 2px,
+      transparent 2px 6px);
+  border-radius: 2px;
+}
+.brand-text h1 { margin: 0; font-size: 19px; letter-spacing: 0.2px; }
+.brand-text p  { margin: 0; font-size: 12px; color: #cbb8bf; }
+
+.ghost-btn {
+  background: transparent;
+  color: var(--plaster);
+  border: 1px solid rgba(255,255,255,0.35);
+  padding: 8px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.ghost-btn:hover { border-color: var(--brick); color: #fff; }
+
+/* ---- Boutons pleins ---- */
+.solid-btn {
+  background: var(--brick);
+  color: #fff;
+  border: none;
+  padding: 11px 20px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.solid-btn:hover { background: var(--brick-dim); }
+.solid-btn:focus-visible,
+.ghost-btn:focus-visible,
+input:focus-visible { outline: 2px solid var(--brick); outline-offset: 2px; }
+
+/* ---- Réglages ---- */
+.settings {
+  background: var(--plaster-deep);
+  border-bottom: 1px solid var(--line);
+  padding: 20px 28px;
+}
+.settings.hidden { display: none; }
+.settings-intro { margin: 0 0 14px; font-size: 13px; color: var(--slate); max-width: 640px; }
+.field-row { display: flex; gap: 18px; flex-wrap: wrap; }
+.field-row label { display: flex; flex-direction: column; font-size: 12px; color: var(--slate); gap: 5px; flex: 1; min-width: 240px; }
+.field-row input {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+.settings-actions { margin-top: 14px; display: flex; align-items: center; gap: 12px; }
+.save-status { font-size: 13px; color: var(--ft); }
+
+/* ---- Recherche ---- */
+.search {
+  display: flex;
+  gap: 12px;
+  padding: 22px 28px 12px;
+}
+.search input {
+  flex: 1;
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 15px;
+  background: #fff;
+}
+
+/* ---- Filtres ---- */
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 4px 28px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.chk { font-size: 13px; color: var(--slate); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.status-line { margin-left: auto; font-size: 13px; color: var(--slate); }
+
+/* ---- Résultats ---- */
+.results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  padding: 22px 28px 40px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brick);
+  border-radius: 10px;
+  padding: 16px 18px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.08s ease, box-shadow 0.12s ease;
+}
+.card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(46,34,48,0.10); }
+.card.src-ft { border-left-color: var(--ft); }
+.card.src-mj { border-left-color: var(--mj); }
+.card.src-adz { border-left-color: var(--adz); }
+
+.badge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+.badge.ft { background: var(--ft-bg); color: var(--ft); }
+.badge.mj { background: var(--mj-bg); color: var(--mj); }
+.badge.adz { background: var(--adz-bg); color: var(--adz); }
+
+.card-title { font-size: 15.5px; font-weight: 650; line-height: 1.3; }
+.card-meta { font-size: 13px; color: var(--slate); }
+.card-meta .salary { color: var(--brick-dim); font-weight: 600; }
+.card-desc { font-size: 12.5px; color: #7c6f75; }
+
+/* ---- État vide ---- */
+.empty { padding: 60px 28px; text-align: center; color: var(--slate); }
+.empty.hidden { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: none; }
+}
+
+/* ---- Mobile : la page doit être confortable sur téléphone ---- */
+@media (max-width: 560px) {
+  .topbar { padding: 14px 16px; }
+  .brand-text h1 { font-size: 17px; }
+  .search { flex-direction: column; padding: 16px; }
+  .search input { width: 100%; }
+  .solid-btn { width: 100%; }
+  .filters { flex-wrap: wrap; padding: 4px 16px 14px; }
+  .status-line { margin-left: 0; width: 100%; margin-top: 6px; }
+  .results { grid-template-columns: 1fr; padding: 16px; }
+}
