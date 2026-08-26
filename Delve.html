@@ -17,6 +17,7 @@
   --red:#f87171;--red-dim:rgba(248,113,113,0.12);
   --violet:#a78bfa;--violet-dim:rgba(167,139,250,0.14);
   --safe-b:env(safe-area-inset-bottom,0px);
+  --col:520px;                          /* largeur de la colonne : téléphone par défaut */
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;overscroll-behavior:none}
@@ -28,10 +29,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 #hdr h1{font-size:19px;font-weight:600;letter-spacing:-.3px}
 #hdr p{font-size:12px;color:var(--muted);margin-top:2px}
 #content{flex:1;overflow-y:auto;padding:14px;padding-bottom:calc(150px + var(--safe-b))}
-.inner{max-width:520px;margin:0 auto}   /* garde l'allure téléphone sur grand écran */
-#hdr .hdr-top,#nav{max-width:520px;margin-left:auto;margin-right:auto;width:100%}
-#toast{max-width:492px;margin:0 auto}
-@media(min-width:560px){.fab{left:50%;margin-left:196px;right:auto}}
+.inner{max-width:var(--col);margin:0 auto}
+#hdr .hdr-top,#nav{max-width:var(--col);margin-left:auto;margin-right:auto;width:100%}
+#toast{max-width:calc(var(--col) - 28px);margin:0 auto}
+@media(min-width:560px){.fab{left:50%;margin-left:calc(var(--col)/2 - 64px);right:auto}}
 
 .mode-switch{display:flex;background:var(--bg3);border:1px solid var(--border2);border-radius:99px;padding:4px;flex-shrink:0}
 .mode-switch button{padding:9px 16px;border-radius:99px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;min-height:44px}
@@ -53,6 +54,12 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 .date-chips::-webkit-scrollbar{display:none}
 .dchip{flex-shrink:0;padding:11px 14px;border-radius:99px;border:1px solid var(--border2);background:var(--bg2);color:var(--muted);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;white-space:nowrap;min-height:44px}
 .dchip.active{background:var(--accent-dim);border-color:rgba(232,200,74,.5);color:var(--accent)}
+/* Rangée du jour : une coupe *dans* le mois choisi, donc un actif plus affirmé que celui du mois. */
+.day-chips{margin-top:-6px}
+.day-chips .dchip{padding:9px 13px;font-size:12.5px}   /* min-height:44px hérité — la rangée reste tactile */
+.day-chips .dchip.active{background:var(--accent);border-color:var(--accent);color:#000;font-weight:600}
+.dchip-n{color:var(--faint);margin-left:6px;font-family:'DM Mono',monospace;font-size:11px}
+.day-chips .dchip.active .dchip-n{color:rgba(0,0,0,.55)}
 
 .day{margin-bottom:14px}
 .day-head{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 6px}
@@ -80,6 +87,25 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 .cap-btn{background:none;border:1px solid var(--border2);color:var(--accent);font-family:inherit;font-size:13px;cursor:pointer;
          margin-top:10px;padding:9px 12px;border-radius:9px;min-height:44px;width:100%}
 
+.psearch-row{display:flex;gap:8px;margin-bottom:12px}
+.psearch{flex:1;display:flex;align-items:center;gap:9px;background:var(--bg2);border:1px solid var(--border2);
+  border-radius:11px;padding:0 12px;min-height:46px;cursor:text}
+.psearch:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.psearch svg{width:17px;height:17px;flex-shrink:0;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round}
+.psearch:focus-within svg{stroke:var(--accent)}
+.psearch input{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:15px;min-width:0}
+.psearch input::placeholder{color:var(--muted)}
+.psearch input::-webkit-search-cancel-button{-webkit-appearance:none;height:15px;width:15px;cursor:pointer;
+  background:var(--faint);mask:url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M18 6 6 18M6 6l12 12' stroke='%23000' stroke-width='2.4' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") center/contain no-repeat}
+.psolde-toggle{flex-shrink:0;background:var(--bg2);border:1px solid var(--border2);border-radius:11px;color:var(--muted);
+  font-family:inherit;font-size:12.5px;font-weight:500;padding:0 13px;min-height:46px;cursor:pointer;white-space:nowrap}
+.psolde-toggle.on{background:var(--accent-dim);border-color:rgba(232,200,74,.5);color:var(--accent)}
+
+/* Une dette soldée reste consultable mais cesse de réclamer l'œil : le nom est barré,
+   la carte s'efface, et elle descend sous celles qui courent encore. */
+.person-card.solded{opacity:.55}
+.person-card.solded:hover,.person-card.solded:focus-within{opacity:1}
+.person-card.solded .person-name{text-decoration:line-through;text-decoration-color:var(--faint);text-decoration-thickness:1.5px}
 .person-card{background:var(--bg2);border:.5px solid var(--border);border-radius:14px;margin-bottom:10px;overflow:hidden}
 .person-header{width:100%;text-align:left;font-family:inherit;background:none;border:none;color:var(--text);
   padding:14px 14px 12px;display:flex;justify-content:space-between;align-items:flex-start;cursor:pointer;min-height:60px}
@@ -234,6 +260,28 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 @keyframes cashflash{0%{background:var(--green-dim)}100%{background:var(--bg2)}}
 .flash{animation:cashflash .9s ease-out}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ── Bureau ───────────────────────────────────────────────────────────────
+   La colonne s'ouvre et les métriques passent sur une rangée : ce que le grand
+   écran offre, c'est de voir le runway et le détail sans scroller entre les deux.
+   960px et pas plus — au-delà, une ligne de mouvement devient une ligne de points
+   de suite entre son libellé et son montant. En fin de feuille pour passer devant
+   les règles de base, qui ont la même spécificité.                            */
+@media(min-width:900px){
+  :root{--col:960px}
+  #content{padding:20px 20px calc(150px + var(--safe-b))}
+  .mgrid{grid-template-columns:repeat(4,1fr);gap:10px}
+  .mval.hero{font-size:44px}
+  .mval{font-size:24px}
+  .psearch-row{max-width:520px}
+  /* Étirées à la hauteur du héros, les petites cartes se lisaient comme des boîtes vides
+     avec un peu de texte coincé en haut. Le contenu se recentre. */
+  .mgrid .mcard:not(.wide){display:flex;flex-direction:column;justify-content:center}
+}
+/* Le bouton + sort de la colonne pour se poser dans la gouttière : sur un grand écran il n'y a
+   aucune raison qu'il continue de masquer le montant d'une ligne. Pas avant 1160px — en dessous
+   la gouttière est trop mince et le bouton passerait hors écran. */
+@media(min-width:1160px){.fab{margin-left:calc(var(--col)/2 + 20px)}}
 </style>
 </head>
 <body>
@@ -257,6 +305,7 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
    <div class="inner">
     <div id="notices"></div>
     <div class="date-chips" id="month-chips"></div>
+    <div class="date-chips day-chips" id="day-chips"></div>
 
     <div class="sec" id="tab-flux">
       <div class="mgrid" id="metrics"></div>
@@ -268,6 +317,14 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 
     <div class="sec" id="tab-dettes">
       <div class="mgrid" id="dettes-metrics"></div>
+      <div class="psearch-row">
+        <label class="psearch">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.2" y2="16.2"/></svg>
+          <input type="search" id="person-q" placeholder="Chercher un nom" aria-label="Chercher une personne"
+                 autocomplete="off" oninput="setPersonQuery(this.value)"/>
+        </label>
+        <button class="psolde-toggle" id="solde-toggle" onclick="toggleSolded()"></button>
+      </div>
       <div id="persons-list"></div>
     </div>
 
@@ -473,7 +530,8 @@ const ICONS = {
 
 let state = { tx: [], caps: {}, cats: null, persons: [], migrated: false, mode: 'budget', month: null };
 let readFailed = false, pendingOldData = null;
-let curTab = 'flux', monthFilter = 'all';
+let curTab = 'flux', monthFilter = 'all', dayFilter = null;
+let personQuery = '', hideSolded = false;   // filtres de vue, jamais persistés
 let editId = null, formType = 'out', formVerdict = null, formCat = null, formX = false;
 let activePersonId = null, editDebtId = null;
 let undoBuf = null, toastTimer = null;
@@ -721,8 +779,34 @@ function renderChips(){
   document.getElementById('month-chips').innerHTML =
     `<button class="dchip ${monthFilter==='all'?'active':''}" onclick="setMonth('all')">Tout</button>` +
     months().map(m => `<button class="dchip ${monthFilter===m?'active':''}" onclick="setMonth('${m}')">${monthLabel(m)}</button>`).join('');
+
+  // La rangée des jours n'existe que dans un mois choisi : sur "Tout" elle ferait
+  // défiler tout l'historique jour par jour, ce qui n'est plus un filtre mais un annuaire.
+  // …et seulement sur le Flux : c'est la seule vue que le jour découpe. Postes, Worth it? et
+  // Coffre raisonnent au mois, une rangée cliquable sans effet y serait un mensonge.
+  const el = document.getElementById('day-chips');
+  const days = curTab === 'flux' ? daysOfMonth() : [];
+  if (days.length < 2){ el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = `<button class="dchip ${!dayFilter?'active':''}" onclick="setDay(null)">Tout le mois</button>` +
+    days.map(([d,n]) => `<button class="dchip ${dayFilter===d?'active':''}" onclick="setDay('${d}')">${dayChipLabel(d)}<span class="dchip-n">${n}</span></button>`).join('');
 }
-function setMonth(m){ monthFilter = m; state.month = m; save(true); render(); }
+// Jours du mois filtré qui portent au moins un mouvement, du plus récent au plus ancien,
+// avec leur nombre de mouvements. Un jour vide n'est pas une option de filtre.
+function daysOfMonth(){
+  if (monthFilter === 'all') return [];
+  const n = {};
+  state.tx.forEach(t => { if (monthOf(t.date) === monthFilter) n[t.date] = (n[t.date]||0) + 1; });
+  return Object.keys(n).sort().reverse().map(d => [d, n[d]]);
+}
+function dayChipLabel(iso){
+  const dt = new Date(iso + 'T12:00:00');
+  if (iso === todayISO()) return "Aujourd'hui";
+  return dt.toLocaleDateString('fr-FR', { weekday:'short', day:'2-digit' }).replace('.', '.');
+}
+function setMonth(m){ monthFilter = m; dayFilter = null; state.month = m; save(true); render(); }
+// Le jour ne se mémorise pas : rouvrir l'app sur un filtre oublié donne une caisse fantôme.
+function setDay(d){ dayFilter = d; render(); }
 
 function renderMetrics(){
   const list = filtered();
@@ -751,8 +835,12 @@ function renderMetrics(){
   const xLine = (s.xIn || s.xOut)
     ? `<div class="msub cv">&#9889; dont exceptionnel ${s.xIn?'+'+fmtM(s.xIn)+' €':''}${s.xIn&&s.xOut?' / ':''}${s.xOut?'−'+fmtM(s.xOut)+' €':''} · hors rythme</div>` : '';
 
+  // Dire lequel des deux périmètres on lit, sinon le jour filtré fait passer les chiffres du mois pour les siens.
+  const dayLine = dayFilter
+    ? `<div class="msub cy">Chiffres du mois · la liste ci-dessous ne montre que ${dayLabel(dayFilter)}</div>` : '';
+
   document.getElementById('metrics').innerHTML = `
-    <div class="mcard wide" id="cash-card">${hero}${xLine}</div>
+    <div class="mcard wide" id="cash-card">${hero}${xLine}${dayLine}</div>
     <div class="mcard"><div class="mlabel">Rentr&eacute;</div><div class="mval cg">+${fmtM(s.in)} &euro;</div></div>
     <div class="mcard"><div class="mlabel">Sorti</div><div class="mval cr">-${fmtM(s.out)} &euro;</div></div>
     ${d.remaining > 0 ? `
@@ -768,7 +856,9 @@ function renderMetrics(){
 
 function renderTx(){
   const el = document.getElementById('tx-list');
-  const list = filtered();
+  // Le filtre jour ne coupe que la liste. Le runway et le rythme restent mensuels :
+  // « il te reste 0,4 jour » calculé sur un mardi ne veut rien dire.
+  const list = filtered().filter(t => !dayFilter || t.date === dayFilter);
   if (!list.length){
     el.innerHTML = `<div class="empty"><div class="empty-ico">&#129689;</div>Rien pour cette période.
       <button class="bfull" onclick="openNew()">Noter un mouvement</button></div>`;
@@ -880,12 +970,41 @@ function renderPersons(){
       <button class="bfull" onclick="openNewPerson()">Ajouter quelqu'un</button></div>`;
     return;
   }
-  el.innerHTML = [...state.persons].sort((a,b) => personStats(b).remaining - personStats(a).remaining).map(personHTML).join('');
+  const solded = state.persons.filter(isSolded).length;
+  const tog = document.getElementById('solde-toggle');
+  tog.hidden = !solded;
+  tog.classList.toggle('on', hideSolded);
+  tog.textContent = hideSolded ? `Voir les ${solded} soldée${solded!==1?'s':''}` : `Masquer les soldées`;
+
+  let list = state.persons.filter(p => matchName(p.name, personQuery));
+  if (hideSolded) list = list.filter(p => !isSolded(p));
+  // Ce qui court encore passe devant ; à égalité, le plus gros reste dû.
+  list.sort((a,b) => (isSolded(a) - isSolded(b)) || (personStats(b).remaining - personStats(a).remaining));
+
+  if (!list.length){
+    el.innerHTML = personQuery
+      ? `<div class="empty"><div class="empty-ico">&#128269;</div>Aucun nom ne correspond à « ${esc(personQuery)} ».
+         <button class="bfull" onclick="clearPersonQuery()">Effacer la recherche</button></div>`
+      : `<div class="empty"><div class="empty-ico">&#9989;</div>Tout est soldé. Personne ne te doit rien.
+         <button class="bfull" onclick="toggleSolded()">Revoir les ${solded} soldée${solded!==1?'s':''}</button></div>`;
+    return;
+  }
+  el.innerHTML = list.map(personHTML).join('');
 }
+function isSolded(p){ return (p.debts||[]).length > 0 && personStats(p).remaining <= 0; }
+// Recherche tolérante : « rene » trouve « René », « MARIE » trouve « marie ».
+function matchName(name, q){
+  if (!q) return true;
+  const fold = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  return fold(name).includes(fold(q));
+}
+function setPersonQuery(v){ personQuery = v; renderPersons(); }
+function clearPersonQuery(){ personQuery = ''; document.getElementById('person-q').value = ''; renderPersons(); }
+function toggleSolded(){ hideSolded = !hideSolded; renderPersons(); }
 function personHTML(p){
   const s = personStats(p);
   const isPaid = s.remaining <= 0 && (p.debts||[]).length > 0;
-  return `<div class="person-card">
+  return `<div class="person-card${isPaid?' solded':''}">
     <button class="person-header" onclick="togglePerson('${p.id}')" aria-expanded="${!!p._open}">
       <span>
         <span class="person-name" style="display:block">${esc(p.name)}</span>
