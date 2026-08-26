@@ -719,6 +719,7 @@ function showTab(name){
     `<button class="nb ${t===name?'active':''}" onclick="showTab('${t}')" aria-current="${t===name}">
        <svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[t]}</svg>${TABLABEL[t]}</button>`).join('');
   document.getElementById('month-chips').style.display = name === 'dettes' ? 'none' : 'flex';
+  dayFilter = null;   // Flux et Coffre n'ont pas les mêmes jours : garder le choix mènerait à une vue vide
   save(true); render();
 }
 function fabAction(){ state.mode === 'dettes' ? openNewPerson() : openNew(); }
@@ -782,27 +783,36 @@ function renderChips(){
 
   // La rangée des jours n'existe que dans un mois choisi : sur "Tout" elle ferait
   // défiler tout l'historique jour par jour, ce qui n'est plus un filtre mais un annuaire.
-  // …et seulement sur le Flux : c'est la seule vue que le jour découpe. Postes, Worth it? et
-  // Coffre raisonnent au mois, une rangée cliquable sans effet y serait un mensonge.
+  // …et seulement là où le jour découpe vraiment quelque chose : le Flux et le Coffre, qui
+  // s'organisent tous deux par journée. Postes et Worth it? raisonnent au mois, une rangée
+  // cliquable sans effet y serait un mensonge.
   const el = document.getElementById('day-chips');
-  const days = curTab === 'flux' ? daysOfMonth() : [];
+  const days = daysOfMonth();
   if (days.length < 2){ el.innerHTML = ''; el.style.display = 'none'; return; }
   el.style.display = '';
   el.innerHTML = `<button class="dchip ${!dayFilter?'active':''}" onclick="setDay(null)">Tout le mois</button>` +
     days.map(([d,n]) => `<button class="dchip ${dayFilter===d?'active':''}" onclick="setDay('${d}')">${dayChipLabel(d)}<span class="dchip-n">${n}</span></button>`).join('');
 }
 // Jours du mois filtré qui portent au moins un mouvement, du plus récent au plus ancien,
-// avec leur nombre de mouvements. Un jour vide n'est pas une option de filtre.
+// avec leur compte. Un jour vide n'est pas une option de filtre — et chaque onglet compte
+// ce qu'il montre : le Flux ses mouvements, le Coffre ses avances et ses encaissements.
 function daysOfMonth(){
-  if (monthFilter === 'all') return [];
+  if (monthFilter === 'all' || !['flux','coffre'].includes(curTab)) return [];
   const n = {};
-  state.tx.forEach(t => { if (monthOf(t.date) === monthFilter) n[t.date] = (n[t.date]||0) + 1; });
+  const add = iso => { if (monthOf(iso) === monthFilter) n[iso] = (n[iso]||0) + 1; };
+  if (curTab === 'coffre'){
+    state.persons.forEach(p => (p.debts||[]).forEach(d => add(d.date)));
+    state.tx.forEach(t => { if (t.src === 'debt') add(t.date); });
+  } else {
+    state.tx.forEach(t => add(t.date));
+  }
   return Object.keys(n).sort().reverse().map(d => [d, n[d]]);
 }
+function inDay(iso){ return !dayFilter || iso === dayFilter; }
 function dayChipLabel(iso){
   const dt = new Date(iso + 'T12:00:00');
   if (iso === todayISO()) return "Aujourd'hui";
-  return dt.toLocaleDateString('fr-FR', { weekday:'short', day:'2-digit' }).replace('.', '.');
+  return dt.toLocaleDateString('fr-FR', { weekday:'short', day:'numeric' });   // « dim. 9 », comme l'en-tête de la liste
 }
 function setMonth(m){ monthFilter = m; dayFilter = null; state.month = m; save(true); render(); }
 // Le jour ne se mémorise pas : rouvrir l'app sur un filtre oublié donne une caisse fantôme.
@@ -1052,13 +1062,13 @@ function coffreDays(){
   const days = {};
   const slot = d => (days[d] = days[d] || { out:0, in:0, lines:[] });
   state.persons.forEach(p => (p.debts||[]).forEach(d => {
-    if (!inPeriod(d.date)) return;
+    if (!inPeriod(d.date) || !inDay(d.date)) return;
     const c = parseFloat(d.cost||0);
     const k = slot(d.date); k.out += c;
     k.lines.push({ who:p.name, what:d.label, amount:-c });
   }));
   state.tx.forEach(t => {
-    if (t.src !== 'debt' || !inPeriod(t.date)) return;
+    if (t.src !== 'debt' || !inPeriod(t.date) || !inDay(t.date)) return;
     const a = Math.abs(parseFloat(t.amount||0));
     const k = slot(t.date); k.in += a;
     k.lines.push({ who:'', what:t.label, amount:a });
@@ -1071,7 +1081,7 @@ function renderCoffre(){
   const days = coffreDays();
   const keys = Object.keys(days).sort().reverse();
   const rows = state.persons.map(p => {
-    const debts = (p.debts||[]).filter(d => inPeriod(d.date));
+    const debts = (p.debts||[]).filter(d => inPeriod(d.date) && inDay(d.date));
     const cost = debts.reduce((s,d) => s+parseFloat(d.cost||0), 0);
     const price = debts.reduce((s,d) => s+parseFloat(d.price||0), 0);
     return { p, debts, cost, margin: price-cost };
@@ -1099,7 +1109,7 @@ function renderCoffre(){
   const max = Math.max(...rows.map(x => x.cost), 0.01);
   el.innerHTML = `
     <div class="mcard wide" style="margin-bottom:12px">
-      <div class="mlabel">Solde de tes avances</div>
+      <div class="mlabel">Solde de tes avances${dayFilter?' · '+dayLabel(dayFilter):''}</div>
       <div class="mval hero ${net>=0?'cg':'cr'}">${net>=0?'+':''}${fmtM(net)} &euro;</div>
       <div class="msub"><span class="cr">−${fmtM(totalOut)} €</span> sorti de ta poche · <span class="cg">+${fmtM(totalIn)} €</span> encaiss&eacute;</div>
     </div>
