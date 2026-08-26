@@ -87,6 +87,36 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 .cap-btn{background:none;border:1px solid var(--border2);color:var(--accent);font-family:inherit;font-size:13px;cursor:pointer;
          margin-top:10px;padding:9px 12px;border-radius:9px;min-height:44px;width:100%}
 
+/* ── Boutons à tap ─────────────────────────────────────────────────────────
+   La cible du + est volontairement énorme : c'est le seul geste de l'onglet,
+   il doit se faire d'une main, sans viser.                                   */
+.btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+/* Colonne + stepper collé en bas : sans ça, un nom sur deux lignes décale le +
+   par rapport à la carte voisine, et la rangée se lit de travers. */
+.btn-card{background:var(--bg2);border:.5px solid var(--border);border-radius:14px;padding:12px 12px 10px;
+  display:flex;flex-direction:column}
+.btn-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.btn-name{font-size:15px;font-weight:600;line-height:1.25}
+.btn-edit{background:none;border:none;padding:4px;margin:-4px -4px 0 0;cursor:pointer;flex-shrink:0;
+  min-width:32px;min-height:32px;display:flex;align-items:center;justify-content:center}
+.btn-edit svg{width:15px;height:15px;fill:none;stroke:var(--faint);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.btn-edit:hover svg,.btn-edit:focus-visible svg{stroke:var(--accent)}
+.btn-meta{font-size:11.5px;color:var(--muted);margin-top:3px}
+.btn-stepper{display:flex;gap:8px;margin-top:auto;padding-top:11px}
+.btn-minus{width:52px;flex-shrink:0;border-radius:12px;border:1px solid var(--border2);background:var(--bg3);
+  color:var(--muted);font-family:inherit;font-size:22px;line-height:1;cursor:pointer;min-height:56px}
+.btn-minus:hover,.btn-minus:focus-visible{border-color:var(--red);color:var(--red)}
+.btn-plus{flex:1;border-radius:12px;border:none;background:var(--accent);color:#000;
+  font-family:inherit;font-size:28px;font-weight:600;line-height:1;cursor:pointer;min-height:56px;
+  transition:transform .09s cubic-bezier(.2,.8,.3,1)}
+.btn-plus:active{transform:scale(.96)}
+.btn-tot{font-size:11.5px;color:var(--muted);margin-top:9px;text-align:center;font-family:'DM Mono',monospace}
+.btn-tot.zero{color:var(--faint)}
+.btn-tot strong{color:var(--text);font-weight:500}
+.btn-empty{background:var(--bg2);border:.5px solid var(--border);border-radius:14px;padding:20px 18px;margin-bottom:14px;text-align:center}
+.btn-empty-t{font-size:15px;font-weight:600;margin-bottom:6px}
+.btn-empty p{font-size:13px;color:var(--muted);line-height:1.5;max-width:46ch;margin:0 auto}
+
 .psearch-row{display:flex;gap:8px;margin-bottom:12px}
 .psearch{flex:1;display:flex;align-items:center;gap:9px;background:var(--bg2);border:1px solid var(--border2);
   border-radius:11px;padding:0 12px;min-height:46px;cursor:text}
@@ -418,6 +448,32 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 </div>
 
 <!-- Sheet : poste -->
+<!-- Sheet : bouton -->
+<div class="sbg" id="btn-bg" onclick="closeSheet('btn-bg',event)">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Bouton">
+    <div class="shandle"></div>
+    <div class="stitle" id="btn-title">Nouveau bouton</div>
+    <div class="field"><label>Nom</label>
+      <input type="text" id="b-label" placeholder="ex: Monster, Uber Eats..." oninput="updateBtnSave()"/></div>
+    <div class="amount-wrap">
+      <input type="number" id="b-amount" placeholder="0" step="0.01" inputmode="decimal" aria-label="Montant par tap" oninput="updateBtnSave()"/>
+      <span class="amount-cur">&euro;</span>
+    </div>
+    <div class="field"><label>Poste</label><div class="chips" id="b-cat-chips"></div></div>
+    <div class="field">
+      <label>&Ccedil;a vaut le coup ? <span style="text-transform:none;letter-spacing:0">(jug&eacute; une fois, pour tous les taps)</span></label>
+      <div class="vchips">
+        <button class="vchip" id="bv-u" onclick="setBtnVerdict('u')">Utile</button>
+        <button class="vchip" id="bv-c" onclick="setBtnVerdict('c')">Confort</button>
+        <button class="vchip" id="bv-i" onclick="setBtnVerdict('i')">Impulsion</button>
+      </div>
+    </div>
+    <button class="bfull" id="btn-save" onclick="saveButton()">Enregistrer</button>
+    <button class="bcancel" onclick="closeSheet('btn-bg')">Annuler</button>
+    <button class="bdel" id="btn-del" style="display:none" onclick="deleteButton()">Supprimer ce bouton</button>
+  </div>
+</div>
+
 <div class="sbg" id="poste-bg" onclick="closeSheet('poste-bg',event)">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Poste">
     <div class="shandle"></div>
@@ -528,7 +584,7 @@ const ICONS = {
   coffre:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>'
 };
 
-let state = { tx: [], caps: {}, cats: null, persons: [], migrated: false, mode: 'budget', month: null };
+let state = { tx: [], caps: {}, cats: null, persons: [], buttons: [], migrated: false, mode: 'budget', month: null };
 let readFailed = false, pendingOldData = null;
 let curTab = 'flux', monthFilter = 'all', dayFilter = null;
 let personQuery = '', hideSolded = false;   // filtres de vue, jamais persistés
@@ -571,6 +627,7 @@ function load(){
     try{
       const s = JSON.parse(raw);
       state.tx = s.tx||[]; state.caps = s.caps||{}; state.cats = s.cats||null;
+      state.buttons = s.buttons||[];
       state.persons = (s.persons||[]).map(fixPerson);
       state.migrated = !!s.migrated; state.mode = s.mode||'budget'; state.month = s.month||null;
     }catch(e){
@@ -934,11 +991,121 @@ function renderPostes(){
   }).join('');
 }
 
+// ── Boutons : une dépense qui revient, jugée une fois, notée en un tap ──
+// Le verdict est fixé à la création du bouton, pas au moment du tap. Ce n'est pas
+// le défaut que la saisie refuse : c'est un jugement rendu une fois puis réutilisé.
+// Sans ça, noter un Monster demanderait trois décisions et ne serait jamais fait.
+function btnTx(id){ return state.tx.filter(t => t.btn === id); }
+function tapButton(id){
+  const b = state.buttons.find(x => x.id === id);
+  if (!b) return;
+  const t = { id:uid(), type:'out', label:b.label, amount:parseFloat(b.amount||0),
+              date:todayISO(), cat:b.cat, v:b.v, btn:b.id };
+  state.tx.push(t);
+  if (monthFilter !== 'all' && monthFilter !== monthOf(t.date)) monthFilter = monthOf(t.date);
+  dayFilter = null;
+  save(); render();
+  toast(`${b.label} · ${fmtM(t.amount)} €`, 'Annuler', () => {
+    state.tx = state.tx.filter(x => x.id !== t.id); save(); render();
+  }, 'good');
+}
+// Retire le tap le plus récent de ce bouton — et rien d'autre.
+function untapButton(id){
+  const mine = btnTx(id).sort((a,b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  if (!mine.length){ toast('Ce bouton n\'a rien noté.', null, null, 'bad'); return; }
+  const t = mine[0];
+  state.tx = state.tx.filter(x => x.id !== t.id);
+  save(); render();
+  toast(`Retiré · ${esc(t.label)} du ${dayLabel(t.date)}`, 'Annuler', () => {
+    state.tx.push(t); save(); render();
+  });
+}
+function renderButtons(){
+  const bs = state.buttons || [];
+  if (!bs.length){
+    return `<div class="btn-empty">
+      <div class="btn-empty-t">Un bouton par dépense qui revient</div>
+      <p>Tu la juges une fois en créant le bouton. Ensuite un tap suffit : le mouvement
+         est noté au jour même, dans le bon poste, avec le verdict déjà rendu.</p>
+      <button class="bfull" style="max-width:280px;margin:14px auto 0" onclick="openNewButton()">Créer un bouton</button>
+    </div>`;
+  }
+  const cards = bs.map(b => {
+    const all = btnTx(b.id), per = all.filter(t => inPeriod(t.date));
+    const total = per.reduce((s,t) => s + Math.abs(parseFloat(t.amount||0)), 0);
+    const v = VERDICTS[b.v] || VERDICTS.c;
+    return `<div class="btn-card">
+      <div class="btn-head">
+        <span class="btn-name">${esc(b.label)}</span>
+        <button class="btn-edit" onclick="openEditButton('${b.id}')" aria-label="Modifier ${esc(b.label)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </div>
+      <div class="btn-meta">${fmtM(b.amount)} € · ${esc(b.cat)} · <span class="${v.cls}">${v.label}</span></div>
+      <div class="btn-stepper">
+        <button class="btn-minus" onclick="untapButton('${b.id}')" aria-label="Retirer le dernier ${esc(b.label)}">&minus;</button>
+        <button class="btn-plus" onclick="tapButton('${b.id}')" aria-label="Noter un ${esc(b.label)}">+</button>
+      </div>
+      <div class="btn-tot ${per.length?'':'zero'}">${per.length}&times; sur la période · <strong>${fmtM(total)} €</strong></div>
+    </div>`;
+  }).join('');
+  return `<div class="btn-grid">${cards}</div>
+    <button class="cap-btn" style="margin-bottom:18px" onclick="openNewButton()">+ Nouveau bouton</button>`;
+}
+
+let btnEdit = null, btnCat = null, btnV = null;
+function openNewButton(){ btnEdit = null; btnCat = null; btnV = null; fillButtonSheet('Nouveau bouton', '', ''); }
+function openEditButton(id){
+  const b = state.buttons.find(x => x.id === id);
+  if (!b) return;
+  btnEdit = b; btnCat = b.cat; btnV = b.v;
+  fillButtonSheet('Modifier le bouton', b.label, b.amount);
+}
+function fillButtonSheet(title, label, amount){
+  document.getElementById('btn-title').textContent = title;
+  document.getElementById('b-label').value = label;
+  document.getElementById('b-amount').value = amount;
+  document.getElementById('btn-del').style.display = btnEdit ? '' : 'none';
+  document.getElementById('b-cat-chips').innerHTML = cats().map(c =>
+    `<button class="chip ${btnCat===c?'on':''}" onclick="setBtnCat('${c.replace(/'/g,"\\'")}')">${esc(c)}</button>`).join('');
+  ['u','c','i'].forEach(k => document.getElementById('bv-'+k).classList.toggle('on', btnV===k));
+  updateBtnSave();
+  openSheet('btn-bg');
+}
+function setBtnCat(c){ btnCat = c; fillButtonSheet(document.getElementById('btn-title').textContent,
+  document.getElementById('b-label').value, document.getElementById('b-amount').value); }
+function setBtnVerdict(v){ btnV = v; ['u','c','i'].forEach(k => document.getElementById('bv-'+k).classList.toggle('on', btnV===k)); updateBtnSave(); }
+// Même exigence que la saisie : pas de poste, pas de verdict, pas d'enregistrement.
+function updateBtnSave(){
+  const ok = document.getElementById('b-label').value.trim()
+          && parseFloat(document.getElementById('b-amount').value) > 0 && btnCat && btnV;
+  document.getElementById('btn-save').disabled = !ok;
+}
+function saveButton(){
+  const label = document.getElementById('b-label').value.trim();
+  const amount = parseFloat(document.getElementById('b-amount').value);
+  if (!label || !(amount > 0) || !btnCat || !btnV) return;
+  if (btnEdit) Object.assign(btnEdit, { label, amount, cat:btnCat, v:btnV });
+  else state.buttons.push({ id:uid(), label, amount, cat:btnCat, v:btnV });
+  closeSheet('btn-bg'); save(); render();
+  toast(btnEdit ? 'Bouton modifié.' : 'Bouton créé.', null, null, 'good');
+}
+// Supprimer le bouton ne supprime pas ce qu'il a noté : ces dépenses ont bien eu lieu.
+function deleteButton(){
+  if (!btnEdit) return;
+  const b = btnEdit, n = btnTx(b.id).length;
+  state.buttons = state.buttons.filter(x => x.id !== b.id);
+  closeSheet('btn-bg'); save(); render();
+  toast(`Bouton supprimé${n?` · ses ${n} mouvement${n>1?'s':''} restent`:''}`, 'Annuler', () => {
+    state.buttons.push(b); save(); render();
+  });
+}
+
 function renderWorthIt(){
   const list = filtered();
   const s = stats(list);
   const el = document.getElementById('worthit-view');
-  if (!s.out){ el.innerHTML = `<div class="empty"><div class="empty-ico">&#127811;</div>Aucune dépense à juger.</div>`; return; }
+  if (!s.out){ el.innerHTML = renderButtons() + `<div class="empty"><div class="empty-ico">&#127811;</div>Aucune dépense à juger.</div>`; return; }
   const rate = s.ordinaryOut / elapsedDays(list);
   const gainDays = rate > 0 ? Math.round(s.byV.i / rate) : 0;
   const rows = ['u','c','i'].map((k,i) => {
@@ -948,7 +1115,7 @@ function renderWorthIt(){
   }).join('');
   const impulses = list.filter(t => t.type==='out' && t.v==='i').sort((a,b) => Math.abs(b.amount)-Math.abs(a.amount)).slice(0,8);
   const utilePct = (s.byV.u/s.out*100).toFixed(0);
-  el.innerHTML = `
+  el.innerHTML = renderButtons() + `
     <div class="mcard wide" style="margin-bottom:10px">
       <div class="mlabel">Bien d&eacute;pens&eacute; ce mois-ci</div>
       <div class="mval big cg">${fmtM(s.byV.u)} &euro;</div>
@@ -1424,9 +1591,10 @@ function saveSync(){ try{ localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); 
 function syncOn(){ return !!sync.token; }
 
 function docOut(){ return { rev:(state.rev||0), by:sync.name, at:new Date().toISOString(),
-  tx:state.tx, caps:state.caps, cats:state.cats, persons:state.persons }; }
+  tx:state.tx, caps:state.caps, cats:state.cats, persons:state.persons, buttons:state.buttons }; }
 function adopt(d){
   state.tx = d.tx||[]; state.caps = d.caps||{}; state.cats = d.cats||SEED_CATS.slice();
+  state.buttons = d.buttons||[];   // un doc écrit par une version d'avant les boutons n'en a pas
   state.persons = (d.persons||[]).map(fixPerson);
   state.rev = d.rev||0; state.by = d.by||''; state.at = d.at||'';
 }
@@ -1564,7 +1732,7 @@ function forgetSync(){
 
 // ── Backup ──
 function exportBackup(){
-  const blob = new Blob([JSON.stringify({ version:3, exportDate:new Date().toISOString(), tx:state.tx, caps:state.caps, cats:state.cats, persons:state.persons }, null, 2)], { type:'application/json' });
+  const blob = new Blob([JSON.stringify({ version:4, exportDate:new Date().toISOString(), tx:state.tx, caps:state.caps, cats:state.cats, persons:state.persons, buttons:state.buttons }, null, 2)], { type:'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'delve-backup-' + todayISO() + '.json';
@@ -1588,6 +1756,7 @@ function importBackup(event){
       if (!confirm('Importer ce backup ?\n\n' + tx.length + ' mouvements · ' + persons.length + ' personnes' + wiLine + '\nExporté le : ' + d + '\n\nCela remplacera toutes tes données actuelles.')) return;
       readFailed = false;
       state.tx = tx; state.caps = data.caps || {}; state.cats = data.cats || SEED_CATS.slice();
+      state.buttons = data.buttons || [];   // un backup d'avant les boutons n'en a pas : liste vide, pas d'erreur
       state.persons = persons.map(fixPerson); state.migrated = true;
       monthFilter = defaultMonth();
       save(); location.reload();
