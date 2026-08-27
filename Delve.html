@@ -87,6 +87,16 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 .cap-btn{background:none;border:1px solid var(--border2);color:var(--accent);font-family:inherit;font-size:13px;cursor:pointer;
          margin-top:10px;padding:9px 12px;border-radius:9px;min-height:44px;width:100%}
 
+/* Rentré / Sorti voilés : une barre neutre à la place du chiffre, jamais une
+   fausse valeur ni des ●●●● qui suggèrent un ordre de grandeur. */
+.mcard.veiled{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:7px;cursor:pointer}
+.veil{display:block;width:78px;height:19px;border-radius:5px;background:var(--bg3);border:.5px solid var(--border)}
+.veil-hint{font-size:11px;color:var(--faint)}
+.mcard.veiled:hover .veil,.mcard.veiled:focus-visible .veil{border-color:var(--border2)}
+.mcard.veiled:hover .veil-hint,.mcard.veiled:focus-visible .veil-hint{color:var(--accent)}
+.flowseg{margin-bottom:12px}
+.flowseg button.on:not(.in):not(.out){background:var(--accent-dim);border-color:rgba(232,200,74,.5);color:var(--accent)}
+
 /* ── Boutons à tap ─────────────────────────────────────────────────────────
    La cible du + est volontairement énorme : c'est le seul geste de l'onglet,
    il doit se faire d'une main, sans viser.                                   */
@@ -339,6 +349,11 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 
     <div class="sec" id="tab-flux">
       <div class="mgrid" id="metrics"></div>
+      <div class="seg flowseg" role="group" aria-label="Filtrer par sens">
+        <button id="fs-all"  onclick="setFlow('all')">Tout</button>
+        <button id="fs-in"   class="in"  onclick="setFlow('in')">&#8595; Entr&eacute;es</button>
+        <button id="fs-out"  class="out" onclick="setFlow('out')">&#8593; Sorties</button>
+      </div>
       <div id="tx-list"></div>
     </div>
 
@@ -588,6 +603,10 @@ let state = { tx: [], caps: {}, cats: null, persons: [], buttons: [], migrated: 
 let readFailed = false, pendingOldData = null;
 let curTab = 'flux', monthFilter = 'all', dayFilter = null;
 let personQuery = '', hideSolded = false;   // filtres de vue, jamais persistés
+let flowFilter = 'all';
+// Rentré / Sorti restent masqués tant qu'on ne les demande pas, et se remasquent au
+// rechargement : ce sont les deux chiffres qu'on ne veut pas voir par-dessus son épaule.
+let showFlows = false;
 let editId = null, formType = 'out', formVerdict = null, formCat = null, formX = false;
 let activePersonId = null, editDebtId = null;
 let undoBuf = null, toastTimer = null;
@@ -874,6 +893,8 @@ function dayChipLabel(iso){
 function setMonth(m){ monthFilter = m; dayFilter = null; state.month = m; save(true); render(); }
 // Le jour ne se mémorise pas : rouvrir l'app sur un filtre oublié donne une caisse fantôme.
 function setDay(d){ dayFilter = d; render(); }
+function setFlow(f){ flowFilter = f; render(); }
+function revealFlows(){ showFlows = true; render(); }
 
 function renderMetrics(){
   const list = filtered();
@@ -895,9 +916,15 @@ function renderMetrics(){
       <div class="msub">Note une dépense et Delve te dira combien de jours ça te laisse.</div>`;
   } else {
     const col = runway <= 5 ? 'cr' : runway <= 12 ? 'cy' : 'cg';
-    hero = `<div class="mlabel">Il te reste</div>
+    // Dire de quoi il reste 19 jours, et jusqu'à quand. « Il te reste 19 jours » tout court
+    // ne se rattache à rien : le lecteur cherche ce qui tombe ce jour-là au lieu de lire
+    // la seule chose que la carte affirme — la date où la caisse atteint zéro.
+    const sec = new Date(Date.now() + runway*864e5)
+      .toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+    hero = `<div class="mlabel">À ce rythme, ta caisse tient</div>
       <div class="mval hero ${col}">${runway} jour${runway!==1?'s':''}</div>
-      <div class="msub"><span style="color:var(--text)">${fmtM(s.solde)} €</span> en caisse · ${fmtM(rate)} €/j${s.xOut?' hors exceptionnel':''}${allTime?' · moyenne sur tout l\'historique' : ''}</div>`;
+      <div class="msub">Vide le <span style="color:var(--text)">${sec}</span> si rien ne rentre d'ici là</div>
+      <div class="msub">${fmtM(s.solde)} € en caisse · ${fmtM(rate)} €/j${s.xOut?' hors exceptionnel':''}${allTime?' · moyenne sur tout l\'historique' : ''}</div>`;
   }
   const xLine = (s.xIn || s.xOut)
     ? `<div class="msub cv">&#9889; dont exceptionnel ${s.xIn?'+'+fmtM(s.xIn)+' €':''}${s.xIn&&s.xOut?' / ':''}${s.xOut?'−'+fmtM(s.xOut)+' €':''} · hors rythme</div>` : '';
@@ -908,8 +935,11 @@ function renderMetrics(){
 
   document.getElementById('metrics').innerHTML = `
     <div class="mcard wide" id="cash-card">${hero}${xLine}${dayLine}</div>
-    <div class="mcard"><div class="mlabel">Rentr&eacute;</div><div class="mval cg">+${fmtM(s.in)} &euro;</div></div>
-    <div class="mcard"><div class="mlabel">Sorti</div><div class="mval cr">-${fmtM(s.out)} &euro;</div></div>
+    ${showFlows
+      ? `<div class="mcard"><div class="mlabel">Rentr&eacute;</div><div class="mval cg">+${fmtM(s.in)} &euro;</div></div>
+         <div class="mcard"><div class="mlabel">Sorti</div><div class="mval cr">-${fmtM(s.out)} &euro;</div></div>`
+      : `<button class="mcard veiled" onclick="revealFlows()"><span class="mlabel">Rentr&eacute;</span><span class="veil" aria-hidden="true"></span><span class="veil-hint">Toucher pour voir</span></button>
+         <button class="mcard veiled" onclick="revealFlows()"><span class="mlabel">Sorti</span><span class="veil" aria-hidden="true"></span><span class="veil-hint">Toucher pour voir</span></button>`}
     ${d.remaining > 0 ? `
     <button class="mcard wide" onclick="setMode('dettes')">
       <span class="chev">&rsaquo;</span>
@@ -925,10 +955,15 @@ function renderTx(){
   const el = document.getElementById('tx-list');
   // Le filtre jour ne coupe que la liste. Le runway et le rythme restent mensuels :
   // « il te reste 0,4 jour » calculé sur un mardi ne veut rien dire.
-  const list = filtered().filter(t => !dayFilter || t.date === dayFilter);
+  ['all','in','out'].forEach(f => document.getElementById('fs-'+f).classList.toggle('on', flowFilter===f));
+  const list = filtered()
+    .filter(t => !dayFilter || t.date === dayFilter)
+    .filter(t => flowFilter === 'all' || t.type === flowFilter);
   if (!list.length){
-    el.innerHTML = `<div class="empty"><div class="empty-ico">&#129689;</div>Rien pour cette période.
-      <button class="bfull" onclick="openNew()">Noter un mouvement</button></div>`;
+    const quoi = flowFilter === 'in' ? 'Aucune entrée' : flowFilter === 'out' ? 'Aucune sortie' : 'Rien';
+    el.innerHTML = `<div class="empty"><div class="empty-ico">&#129689;</div>${quoi} pour cette période.
+      ${flowFilter!=='all' ? `<button class="bfull" onclick="setFlow('all')">Voir tous les mouvements</button>`
+                           : `<button class="bfull" onclick="openNew()">Noter un mouvement</button>`}</div>`;
     return;
   }
   const byDay = {};
