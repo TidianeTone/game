@@ -52,6 +52,7 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 .mval.big{font-size:28px}
 .msub{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.45}
 .chev{float:right;color:var(--faint);font-size:18px;line-height:1}
+.recal{display:block;margin-top:8px;background:none;border:none;padding:0;color:var(--accent);font-family:inherit;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;min-height:44px;text-align:left}
 .cy{color:var(--accent)}.cg{color:var(--green)}.cr{color:var(--red)}.cf{color:var(--faint)}.cv{color:var(--violet)}
 
 .date-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;margin-bottom:14px}
@@ -505,6 +506,22 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
   </div>
 </div>
 
+<!-- Sheet : recalage -->
+<div class="sbg" id="recal-bg" onclick="closeSheet('recal-bg',event)">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Recaler la caisse">
+    <div class="stitle">Recaler sur ton vrai solde</div>
+    <div class="xhint" style="margin-bottom:12px">Regarde ton appli bancaire et ce que tu as en poche.
+      Stax note l&apos;&eacute;cart comme un mouvement &mdash; ta caisse reste la somme de ce que tu notes, jamais un chiffre pos&eacute; &agrave; la main.</div>
+    <div class="field"><label>Sur le compte (&euro;)</label>
+      <input type="number" id="rc-bank" placeholder="0.00" step="0.01" inputmode="decimal" oninput="recalHint()"/></div>
+    <div class="field"><label>En esp&egrave;ces (&euro;)</label>
+      <input type="number" id="rc-cash" placeholder="0.00" step="0.01" inputmode="decimal" oninput="recalHint()"/></div>
+    <div class="xhint" id="rc-gap" style="margin-bottom:12px"></div>
+    <button class="bfull" onclick="saveRecal()">Recaler</button>
+    <button class="bcancel" onclick="closeSheet('recal-bg')">Annuler</button>
+  </div>
+</div>
+
 <!-- Sheet : personne -->
 <div class="sbg" id="person-bg" onclick="closeSheet('person-bg',event)">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Nouvelle personne">
@@ -603,7 +620,7 @@ const ICONS = {
   coffre:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>'
 };
 
-let state = { tx: [], caps: {}, cats: null, persons: [], buttons: [], migrated: false, mode: 'budget', month: null };
+let state = { tx: [], caps: {}, cats: null, persons: [], buttons: [], migrated: false, mode: 'budget', month: null, adjust: null };
 let readFailed = false, pendingOldData = null;
 let curTab = 'flux', monthFilter = 'all', dayFilter = null;
 let personQuery = '', hideSolded = false;   // filtres de vue, jamais persistés
@@ -735,6 +752,10 @@ function stats(list){
     if (t.type === 'in'){ s.in += a; if (t.x) s.xIn += a; return; }
     s.out += a;
     if (t.x) s.xOut += a;
+    // Un recalage compte dans le rythme (c'est de la vraie depense oubliee) mais
+    // pas dans Worth it? : aucun verdict n'a ete rendu dessus, le defaut 'Confort'
+    // ferait mesurer a l'onglet un remplissage automatique.
+    if (t.src === 'adjust'){ s.byCat['Recalage'] = (s.byCat['Recalage']||0) + a; return; }
     const c = t.cat || 'Autre';
     s.byCat[c] = (s.byCat[c]||0) + a;
     const v = VERDICTS[t.v] ? t.v : 'c';
@@ -938,7 +959,8 @@ function renderMetrics(){
     ? `<div class="msub cy">Chiffres du mois · la liste ci-dessous ne montre que ${dayLabel(dayFilter)}</div>` : '';
 
   document.getElementById('metrics').innerHTML = `
-    <div class="mcard wide" id="cash-card">${hero}${xLine}${dayLine}</div>
+    <div class="mcard wide" id="cash-card">${hero}${xLine}${dayLine}
+      <button class="recal" onclick="openRecal()">Recaler sur mon vrai solde${state.adjust ? ' &middot; dernier le ' + dayLabel(state.adjust.date) : ''}</button></div>
     ${showFlows
       ? `<div class="mcard"><div class="mlabel">Rentr&eacute;</div><div class="mval cg">+${fmtM(s.in)} &euro;</div></div>
          <div class="mcard"><div class="mlabel">Sorti</div><div class="mval cr">-${fmtM(s.out)} &euro;</div></div>`
@@ -1469,6 +1491,58 @@ function deleteTx(){
 
 // ── Postes ──
 let editCat = null;
+// ── Recalage ──────────────────────────────────────────────────────────────
+// Le solde reste une consequence des mouvements : on n'ecrit jamais un solde,
+// on ecrit l'ecart entre le reel et le calcule, comme un mouvement de plus.
+function recalTarget(){
+  const cur = monthOf(todayISO());
+  let date = todayISO();
+  if (monthFilter !== 'all' && monthFilter !== cur){
+    // caisse d'un mois revolu : l'ecart appartient a ce mois-la, pas a aujourd'hui
+    const [y, m] = monthFilter.split('-').map(Number);
+    date = monthFilter + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0');
+  }
+  return { solde: stats(filtered()).solde, date };
+}
+function recalHint(){
+  const b = parseFloat(document.getElementById('rc-bank').value) || 0;
+  const c = parseFloat(document.getElementById('rc-cash').value) || 0;
+  const t = recalTarget();
+  const gap = Math.round((b + c - t.solde) * 100) / 100;
+  const el = document.getElementById('rc-gap');
+  if (!b && !c){ el.innerHTML = ''; return; }
+  el.innerHTML = gap === 0
+    ? 'Ta caisse dit d&eacute;j&agrave; la v&eacute;rit&eacute;, rien &agrave; recaler.'
+    : `Caisse calcul&eacute;e ${fmtM(t.solde)} &euro; &middot; r&eacute;el ${fmtM(b+c)} &euro; &rarr; <span class="${gap>0?'cg':'cr'}">`
+      + `${gap>0?'oubli de rentr&eacute;e':'d&eacute;penses oubli&eacute;es'} de ${fmtM(Math.abs(gap))} &euro;</span>`;
+}
+function openRecal(){
+  const a = state.adjust || {};
+  document.getElementById('rc-bank').value = '';
+  document.getElementById('rc-cash').value = a.cash || '';
+  document.getElementById('rc-gap').innerHTML = '';
+  openSheet('recal-bg');
+  recalHint();
+}
+function saveRecal(){
+  const bank = parseFloat(document.getElementById('rc-bank').value) || 0;
+  const cash = parseFloat(document.getElementById('rc-cash').value) || 0;
+  if (!bank && !cash) return;
+  const t = recalTarget();
+  const gap = Math.round((bank + cash - t.solde) * 100) / 100;
+  state.adjust = { date: todayISO(), bank, cash };
+  if (gap){
+    // x:false volontairement — de la depense oubliee reste de la depense : elle doit
+    // peser sur le rythme journalier, sinon le runway continue de mentir en mieux.
+    state.tx.push({ id:uid(), type: gap > 0 ? 'in' : 'out', label:'Recalage',
+                    amount: Math.abs(gap), date: t.date, cat:'', v:'', x:false, src:'adjust' });
+  }
+  save(); closeSheet('recal-bg'); render();
+  toast(gap
+    ? (gap > 0 ? '+' : '−') + fmtM(Math.abs(gap)) + ' € de recalage noté.'
+    : 'Rien à recaler, ta caisse était juste.', null, null, 'good');
+}
+
 function openPoste(c){
   editCat = c;
   document.getElementById('poste-title').textContent = c;
@@ -1829,6 +1903,15 @@ function selfTest(){
   ok(s.solde === 4820, 'solde');
   ok(s.ordinaryOut === 280, 'rythme calculé hors exceptionnel');
   ok(s.byCat.Livraison === 250 && s.byCat.Achats === 900, 'byCat inclut l\'exceptionnel');
+
+  // Recalage : pese sur le rythme, visible dans les postes, absent des verdicts.
+  const r = stats([
+    { type:'out', amount:100, date:'2026-08-01', cat:'Livraison', v:'i' },
+    { type:'out', amount:60,  date:'2026-08-02', label:'Recalage', cat:'', v:'', src:'adjust' }
+  ]);
+  ok(r.out === 160 && r.ordinaryOut === 160, 'le recalage compte dans le rythme');
+  ok(r.byCat.Recalage === 60, 'le recalage apparait dans les postes');
+  ok(r.byV.c === 0 && r.byV.i === 100, 'le recalage ne prend pas de verdict par defaut');
   ok(s.byV.i === 200 && s.byV.u === 950 && s.byV.c === 30, 'byV (verdict inconnu -> confort)');
   ok(frToISO('05/09/2026') === '2026-09-05' && frToISO('2026-09-05') === '2026-09-05', 'frToISO');
   ok(monthOf('2026-08-20') === '2026-08', 'monthOf');
