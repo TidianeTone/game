@@ -52,6 +52,12 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 .mval.big{font-size:28px}
 .msub{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.45}
 .chev{float:right;color:var(--faint);font-size:18px;line-height:1}
+.up-row{display:flex;align-items:baseline;gap:10px;font-size:13px;padding:6px 0;border-top:.5px solid var(--border)}
+.up-when{color:var(--muted);min-width:88px;font-size:12px}
+.up-what{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up-amt{font-family:'DM Mono',monospace;font-weight:600}
+.linkline{display:block;margin-top:5px;background:none;border:none;padding:0;font-family:inherit;font-size:12px;line-height:1.45;cursor:pointer;text-align:left;color:var(--violet)}
+.linkline u{text-underline-offset:3px}
 .recal{display:block;margin-top:8px;background:none;border:none;padding:0;color:var(--accent);font-family:inherit;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;min-height:44px;text-align:left}
 .cy{color:var(--accent)}.cg{color:var(--green)}.cr{color:var(--red)}.cf{color:var(--faint)}.cv{color:var(--violet)}
 
@@ -627,7 +633,7 @@ let personQuery = '', hideSolded = false;   // filtres de vue, jamais persistés
 let flowFilter = 'all';
 // Rentré / Sorti restent masqués tant qu'on ne les demande pas, et se remasquent au
 // rechargement : ce sont les deux chiffres qu'on ne veut pas voir par-dessus son épaule.
-let showFlows = false;
+let xOnly = false, showFlows = false;
 let editId = null, formType = 'out', formVerdict = null, formCat = null, formX = false;
 let activePersonId = null, editDebtId = null;
 let undoBuf = null, toastTimer = null;
@@ -756,6 +762,9 @@ function stats(list){
     // pas dans Worth it? : aucun verdict n'a ete rendu dessus, le defaut 'Confort'
     // ferait mesurer a l'onglet un remplissage automatique.
     if (t.src === 'adjust'){ s.byCat['Recalage'] = (s.byCat['Recalage']||0) + a; return; }
+    // Le cout d'une avance sort vraiment de la poche : il pese sur le rythme et se voit
+    // dans les postes, mais il n'a pas ete « choisi » -- aucun verdict a rendre dessus.
+    if (t.src === 'debt'){ s.byCat['Avances'] = (s.byCat['Avances']||0) + a; return; }
     const c = t.cat || 'Autre';
     s.byCat[c] = (s.byCat[c]||0) + a;
     const v = VERDICTS[t.v] ? t.v : 'c';
@@ -764,6 +773,85 @@ function stats(list){
   s.solde = s.in - s.out;
   s.ordinaryOut = s.out - s.xOut;   // le rythme ignore l'exceptionnel
   return s;
+}
+// ── Ce qui revient tous les mois ──
+// Deduit de l'historique, pas saisi a la main : le loyer et la CAF sont deja dans les releves.
+// Un libelle porte souvent son mois (« Loyer Aout Sow ») : on le retire avant de comparer.
+const MOIS_RE = /\b(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre)\b/gi;
+function normLabel(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(MOIS_RE,' ').replace(/[^a-z ]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function median(a){ const v=[...a].sort((x,y)=>x-y); return v[Math.floor(v.length/2)]; }
+function addMonth(m){ const [y,mo]=m.split('-').map(Number); return mo===12 ? (y+1)+'-01' : y+'-'+String(mo+1).padStart(2,'0'); }
+function clampDay(m, day){
+  const [y,mo]=m.split('-').map(Number);
+  const last = new Date(y, mo, 0).getDate();          // jour 31 dans un mois de 30 : on cale sur le dernier
+  return m + '-' + String(Math.min(day,last)).padStart(2,'0');
+}
+function recurrents(){
+  const g = {};
+  state.tx.forEach(t => {
+    if (t.x || t.src === 'adjust' || t.src === 'debt') return;   // exceptionnel ou ponctuel : ca ne revient pas
+    const k = normLabel(t.label);
+    if (k.length < 3) return;
+    (g[t.type+'|'+k] = g[t.type+'|'+k] || []).push(t);
+  });
+  return Object.values(g).map(rows => {
+    const months = [...new Set(rows.map(t => monthOf(t.date)))].sort();
+    if (months.length < 2) return null;              // deux mois differents, sinon c'est un hasard
+    // Une echeance tombe une fois par mois. Uber Eats quinze fois dans le mois est frequent,
+    // pas programme : le reprogrammer a une date fausserait le runway dans les deux sens.
+    if (rows.length > months.length + 1) return null;
+    const days = rows.map(t => +t.date.slice(8,10));
+    const day = median(days);
+    // Une echeance tombe a peu pres le meme jour, a un week-end pres. Un cafe pris le 19
+    // puis le 8 n'est pas programme : c'est un hasard a deux occurrences, et l'annoncer
+    // au 13 du mois prochain serait une invention.
+    if (Math.max(...days.map(x => Math.min(Math.abs(x-day), 31-Math.abs(x-day)))) > 3) return null;
+    // « Loyer Aout Sow » annoncé pour septembre serait un contresens : le mois saute du libellé.
+    const label = String(rows[rows.length-1].label||'').replace(MOIS_RE,' ').replace(/\s+/g,' ').trim();
+    return { label, type: rows[0].type, ids: rows.map(t => t.id),
+             amount: median(rows.map(t => Math.abs(parseFloat(t.amount||0)))), day, months, n: months.length };
+  }).filter(Boolean);
+}
+// Prochaine echeance : si le mois en cours l'a deja vue, c'est pour le mois suivant.
+function nextOccur(r){
+  const today = todayISO(), cur = monthOf(today);
+  let d = clampDay(r.months.includes(cur) ? addMonth(cur) : cur, r.day);
+  if (d < today) d = clampDay(addMonth(monthOf(d)), r.day);
+  return d;
+}
+function isoPlus(iso, n){ return new Date(new Date(iso+'T12:00:00').getTime() + n*864e5).toISOString().slice(0,10); }
+// L'echeancier : chaque recurrent repose a sa date, mois apres mois, jusqu'a l'horizon.
+function upcoming(days){
+  const end = isoPlus(todayISO(), days), out = [];
+  recurrents().forEach(r => {
+    for (let d = nextOccur(r); d <= end; d = clampDay(addMonth(monthOf(d)), r.day)) out.push({ ...r, date:d });
+  });
+  return out.sort((a,b) => a.date.localeCompare(b.date));
+}
+// Ce que le rythme moyen ne doit plus porter : les sorties qui ont leur propre date.
+function recurringOutIds(){
+  const set = new Set();
+  recurrents().forEach(r => { if (r.type === 'out') r.ids.forEach(i => set.add(i)); });
+  return set;
+}
+// Runway projete : le rythme courant grignote chaque jour, les echeances tombent a leur date.
+// Rien n'est compte deux fois — le loyer est sorti de la moyenne pour etre pose au 3 du mois.
+const HORIZON = 180;   // au-dela, projeter sur trois lignes recurrentes serait de la voyance
+function projectRunway(solde, rate, sched, horizon){
+  horizon = horizon || HORIZON;
+  const plan = {};
+  sched.forEach(r => { plan[r.date] = (plan[r.date]||0) + (r.type === 'in' ? 1 : -1) * r.amount; });
+  let bal = solde;
+  for (let i = 0; i < horizon; i++){
+    const iso = isoPlus(todayISO(), i);
+    bal += plan[iso] || 0;
+    bal -= rate;
+    if (bal <= 0) return { days:i, date:iso, beyond:false };
+  }
+  return { days:horizon, date:isoPlus(todayISO(), horizon), beyond:true };
 }
 function elapsedDays(list){
   const dates = list.map(t => t.date).filter(Boolean).sort();
@@ -919,16 +1007,26 @@ function setMonth(m){ monthFilter = m; dayFilter = null; state.month = m; save(t
 // Le jour ne se mémorise pas : rouvrir l'app sur un filtre oublié donne une caisse fantôme.
 function setDay(d){ dayFilter = d; render(); }
 function setFlow(f){ flowFilter = f; render(); }
+function toggleXOnly(){ xOnly = !xOnly; render(); }
 function revealFlows(){ showFlows = true; render(); }
 
 function renderMetrics(){
   const list = filtered();
   const s = stats(list);
   const days = elapsedDays(list);
-  const rate = s.ordinaryOut / days;
-  const runway = rate > 0 ? Math.floor(s.solde / rate) : null;
   const d = debtTotals();
   const allTime = monthFilter === 'all';
+
+  // Projeter n'a de sens que depuis aujourd'hui : sur « juin 26 » le rythme est celui d'un mois clos.
+  const live = allTime || monthFilter === monthOf(todayISO());
+  const recIds = live ? recurringOutIds() : new Set();
+  // Le rythme qui reste : les dépenses courantes une fois les récurrents mis de côté,
+  // puisqu'ils vont être reposés un par un à leur date.
+  const rate = (recIds.size ? stats(list.filter(t => !recIds.has(t.id))).ordinaryOut : s.ordinaryOut) / days;
+  const plain = s.ordinaryOut / days;
+  const sched = live ? upcoming(HORIZON) : [];
+  const proj = sched.length && s.solde > 0 ? projectRunway(s.solde, rate, sched) : null;
+  const runway = proj ? proj.days : plain > 0 ? Math.floor(s.solde / plain) : null;
 
   let hero;
   if (s.solde <= 0){
@@ -939,20 +1037,45 @@ function renderMetrics(){
     hero = `<div class="mlabel">Reste de la caisse</div>
       <div class="mval hero cg">${fmtM(s.solde)} &euro;</div>
       <div class="msub">Note une dépense et Stax te dira combien de jours ça te laisse.</div>`;
+  } else if (proj && proj.beyond){
+    // Les rentrées récurrentes couvrent le rythme : annoncer « 180 jours » ferait passer
+    // l'horizon du calcul pour une date de fin. Il n'y en a pas, c'est ça l'information.
+    hero = `<div class="mlabel">Avec ce qui tombe chaque mois, ta caisse tient</div>
+      <div class="mval hero cg">plus de 6 mois</div>
+      <div class="msub">Tes rentrées régulières couvrent ton rythme — au-delà, Stax ne devine plus.</div>
+      <div class="msub">${fmtM(s.solde)} € en caisse · ${fmtM(rate)} €/j de dépenses courantes, récurrents à part</div>`;
   } else {
     const col = runway <= 5 ? 'cr' : runway <= 12 ? 'cy' : 'cg';
     // Dire de quoi il reste 19 jours, et jusqu'à quand. « Il te reste 19 jours » tout court
     // ne se rattache à rien : le lecteur cherche ce qui tombe ce jour-là au lieu de lire
     // la seule chose que la carte affirme — la date où la caisse atteint zéro.
-    const sec = new Date(Date.now() + runway*864e5)
+    const sec = new Date((proj ? new Date(proj.date+'T12:00:00').getTime() : Date.now() + runway*864e5))
       .toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
-    hero = `<div class="mlabel">À ce rythme, ta caisse tient</div>
+    // Deux promesses différentes : sans échéancier, « si rien ne rentre » ; avec, le loyer
+    // et la CAF sont déjà dans le compte, et le dire évite de lire deux fois la même prudence.
+    hero = `<div class="mlabel">${proj ? 'Loyer et rentrées compris, ta caisse tient' : 'À ce rythme, ta caisse tient'}</div>
       <div class="mval hero ${col}">${runway} jour${runway!==1?'s':''}</div>
-      <div class="msub">Vide le <span style="color:var(--text)">${sec}</span> si rien ne rentre d'ici là</div>
-      <div class="msub">${fmtM(s.solde)} € en caisse · ${fmtM(rate)} €/j${s.xOut?' hors exceptionnel':''}${allTime?' · moyenne sur tout l\'historique' : ''}</div>`;
+      <div class="msub">Vide le <span style="color:var(--text)">${sec}</span>${proj ? ', échéances connues déjà comptées' : " si rien ne rentre d'ici là"}</div>
+      <div class="msub">${fmtM(s.solde)} € en caisse · ${fmtM(rate)} €/j${proj ? ' de dépenses courantes, récurrents à part' : s.xOut?' hors exceptionnel':''}${allTime&&!proj?' · moyenne sur tout l\'historique' : ''}</div>`;
   }
   const xLine = (s.xIn || s.xOut)
-    ? `<div class="msub cv">&#9889; dont exceptionnel ${s.xIn?'+'+fmtM(s.xIn)+' €':''}${s.xIn&&s.xOut?' / ':''}${s.xOut?'−'+fmtM(s.xOut)+' €':''} · hors rythme</div>` : '';
+    ? `<div class="msub cv">&#9889; dont exceptionnel ${s.xIn?'+'+fmtM(s.xIn)+' €':''}${s.xIn&&s.xOut?' / ':''}${s.xOut?'−'+fmtM(s.xOut)+' €':''} · compté dans la caisse, retiré du rythme</div>
+       <button class="linkline" onclick="toggleXOnly()"><u>${xOnly?'Revoir tous les mouvements':'Voir lesquels'}</u></button>` : '';
+
+  // Ce qui va tomber : rien a saisir, l'historique le dit deja. Une echeance annoncee
+  // change la lecture du runway — « 8 jours » ne veut pas dire pareil si la CAF tombe dans 3.
+  const soon = upcoming(14);
+  const net = soon.reduce((a,r) => a + (r.type==='in'?1:-1)*r.amount, 0);
+  const upCard = soon.length ? `<div class="mcard wide">
+    <div class="mlabel">&#128197; À venir · 14 prochains jours</div>
+    <div class="mval ${net>=0?'cg':'cr'}">${net>=0?'+':'−'}${fmtM(Math.abs(net))} €</div>
+    ${soon.slice(0,6).map(r => `<div class="up-row">
+      <span class="up-when">${dayLabel(r.date)}</span>
+      <span class="up-what">${esc(r.label)}</span>
+      <span class="up-amt ${r.type==='in'?'cg':'cr'}">${r.type==='in'?'+':'−'}${fmtM(r.amount)} €</span></div>`).join('')}
+    ${soon.length > 6 ? `<div class="up-row"><span class="up-when"></span><span class="up-what">et ${soon.length-6} autre${soon.length-6>1?'s':''} échéance${soon.length-6>1?'s':''} d'ici là</span>
+      <span class="up-amt cr">−${fmtM(soon.slice(6).reduce((a,r)=>a+(r.type==='in'?-1:1)*r.amount,0))} €</span></div>` : ''}
+    <div class="msub">Repéré tout seul : ces lignes reviennent chaque mois dans ton historique, à peu près le même jour. Montant et jour = la médiane des fois précédentes.</div></div>` : '';
 
   // Dire lequel des deux périmètres on lit, sinon le jour filtré fait passer les chiffres du mois pour les siens.
   const dayLine = dayFilter
@@ -961,6 +1084,7 @@ function renderMetrics(){
   document.getElementById('metrics').innerHTML = `
     <div class="mcard wide" id="cash-card">${hero}${xLine}${dayLine}
       <button class="recal" onclick="openRecal()">Recaler sur mon vrai solde${state.adjust ? ' &middot; dernier le ' + dayLabel(state.adjust.date) : ''}</button></div>
+    ${upCard}
     ${showFlows
       ? `<div class="mcard"><div class="mlabel">Rentr&eacute;</div><div class="mval cg">+${fmtM(s.in)} &euro;</div></div>
          <div class="mcard"><div class="mlabel">Sorti</div><div class="mval cr">-${fmtM(s.out)} &euro;</div></div>`
@@ -984,11 +1108,13 @@ function renderTx(){
   ['all','in','out'].forEach(f => document.getElementById('fs-'+f).classList.toggle('on', flowFilter===f));
   const list = filtered()
     .filter(t => !dayFilter || t.date === dayFilter)
+    .filter(t => !xOnly || t.x)
     .filter(t => flowFilter === 'all' || t.type === flowFilter);
   if (!list.length){
-    const quoi = flowFilter === 'in' ? 'Aucune entrée' : flowFilter === 'out' ? 'Aucune sortie' : 'Rien';
+    const quoi = xOnly ? "Rien d'exceptionnel" : flowFilter === 'in' ? 'Aucune entrée' : flowFilter === 'out' ? 'Aucune sortie' : 'Rien';
     el.innerHTML = `<div class="empty"><div class="empty-ico">&#129689;</div>${quoi} pour cette période.
-      ${flowFilter!=='all' ? `<button class="bfull" onclick="setFlow('all')">Voir tous les mouvements</button>`
+      ${xOnly ? `<button class="bfull" onclick="toggleXOnly()">Voir tous les mouvements</button>`
+        : flowFilter!=='all' ? `<button class="bfull" onclick="setFlow('all')">Voir tous les mouvements</button>`
                            : `<button class="bfull" onclick="openNew()">Noter un mouvement</button>`}</div>`;
     return;
   }
@@ -1007,7 +1133,8 @@ function txHTML(t){
   const isIn = t.type === 'in';
   const v = VERDICTS[t.v] || VERDICTS.c;
   const amt = Math.abs(parseFloat(t.amount||0));
-  const meta = isIn ? (t.src === 'debt' ? 'Marge encaissée' : 'Rentrée') : esc(t.cat||'Autre') + ' · ' + v.label;
+  const meta = isIn ? (t.src === 'debt' ? 'Remboursement encaissé' : 'Rentrée')
+             : t.src === 'debt' ? 'Avance · coût réel' : esc(t.cat||'Autre') + ' · ' + v.label;
   return `<button class="tx" onclick="openEdit('${t.id}')">
     <span class="tx-dot" style="background:${t.x?'var(--violet)':isIn?'var(--green)':v.col}"></span>
     <span class="tx-main">
@@ -1296,7 +1423,7 @@ function coffreDays(){
     k.lines.push({ who:p.name, what:d.label, amount:-c });
   }));
   state.tx.forEach(t => {
-    if (t.src !== 'debt' || !inPeriod(t.date) || !inDay(t.date)) return;
+    if (t.src !== 'debt' || t.type !== 'in' || !inPeriod(t.date) || !inDay(t.date)) return;
     const a = Math.abs(parseFloat(t.amount||0));
     const k = slot(t.date); k.in += a;
     k.lines.push({ who:'', what:t.label, amount:a });
@@ -1587,7 +1714,7 @@ function openNewDebt(personId){
   activePersonId = personId; editDebtId = null;
   const p = state.persons.find(x => x.id === personId);
   document.getElementById('debt-title').textContent = 'Avance pour ' + p.name;
-  document.getElementById('debt-info').innerHTML = `<strong>${esc(p.name)}</strong> — nouvelle avance. Le coût réel ne sort pas de la caisse du Budget.`;
+  document.getElementById('debt-info').innerHTML = `<strong>${esc(p.name)}</strong> — nouvelle avance. Le coût réel sort de ta caisse : il devient une dépense du Budget, et l'encaissement la remplit en retour.`;
   ['d-label','d-price','d-cost','d-note'].forEach(i => document.getElementById(i).value = '');
   document.getElementById('d-date').value = todayISO();
   document.getElementById('d-warn').textContent = '';
@@ -1631,11 +1758,27 @@ function saveDebt(){
   if (!p) return;
   if (editDebtId){
     const d = p.debts.find(x => x.id === editDebtId);
-    if (d) Object.assign(d, { label, price, cost, note, date });
+    if (d){ Object.assign(d, { label, price, cost, note, date }); syncDebtTx(p, d); }
   } else {
-    p.debts.push({ id:uid(), label, price, cost, note, paid:0, date });
+    const d = { id:uid(), label, price, cost, note, paid:0, date };
+    p.debts.push(d); syncDebtTx(p, d);
   }
   save(); closeSheet('debt-bg'); render();
+}
+// Le cout reel d'une avance est de l'argent qui quitte vraiment la caisse : il lui faut une
+// depense dans le Budget, sinon le solde annonce ce que la banque ne confirme pas. Une seule
+// depense par avance (d.costTx), reecrite a chaque modification.
+function syncDebtTx(p, d){
+  const cost = parseFloat(d.cost||0);
+  const i = d.costTx ? state.tx.findIndex(x => x.id === d.costTx) : -1;
+  if (cost <= 0){ if (i >= 0) state.tx.splice(i, 1); d.costTx = null; return; }
+  const t = i >= 0 ? state.tx[i] : { id:uid(), type:'out', src:'debt', person:p.id };
+  Object.assign(t, { label: p.name + ' — ' + d.label, amount:cost, date:d.date, cat:'Avances', v:'' });
+  if (i < 0){ state.tx.push(t); d.costTx = t.id; }
+}
+function dropDebtTx(d){
+  const i = d.costTx ? state.tx.findIndex(x => x.id === d.costTx) : -1;
+  return i >= 0 ? state.tx.splice(i, 1)[0] : null;
 }
 function deleteDebt(){
   const p = state.persons.find(x => x.id === activePersonId);
@@ -1644,8 +1787,9 @@ function deleteDebt(){
   if (i < 0) return;
   const d = p.debts[i];
   p.debts.splice(i, 1);
+  const gone = dropDebtTx(d);
   save(); closeSheet('debt-bg'); render();
-  toast('Avance supprimée.', 'Annuler', () => { p.debts.splice(i, 0, d); save(); render(); });
+  toast('Avance supprimée.', 'Annuler', () => { p.debts.splice(i, 0, d); if (gone) state.tx.push(gone); save(); render(); });
 }
 
 // ── Remboursement → entrée dans le Budget ──
@@ -1663,31 +1807,37 @@ function cashedMargin(p){
 }
 function applyPayment(p, amount){
   const marginBefore = cashedMargin(p);
-  let left = amount;
+  let left = amount, cash = 0;
   (p.debts||[]).forEach(d => {
     if (left <= 0) return;
-    const due = parseFloat(d.price||0) - parseFloat(d.paid||0);
+    const paid = parseFloat(d.paid||0), cost = parseFloat(d.cost||0);
+    const due = parseFloat(d.price||0) - paid;
     if (due <= 0) return;
     const apply = Math.min(due, left);
-    d.paid = parseFloat(d.paid||0) + apply;
+    // Avance dont le cout est deja sorti de la caisse : tout l'encaisse y rentre.
+    // Avance d'avant (aucune depense generee) : seule la marge est de l'argent neuf,
+    // le reste rembourse un cout que la caisse n'a jamais vu partir.
+    cash += d.costTx ? apply
+                     : Math.max(0, paid + apply - cost) - Math.max(0, paid - cost);
+    d.paid = paid + apply;
     left -= apply;
   });
   const cashed = amount - left;
   const gain = cashedMargin(p) - marginBefore;
-  if (gain > 0){
-    state.tx.push({ id:uid(), type:'in', label:p.name, amount:gain, date:todayISO(), cat:'Remboursement', v:'', src:'debt', person:p.id });
+  if (cash > 0){
+    state.tx.push({ id:uid(), type:'in', label:p.name, amount:cash, date:todayISO(), cat:'Remboursement', v:'', src:'debt', person:p.id });
   }
-  return { cashed, gain };
+  return { cashed, gain, cash };
 }
 function savePayment(){
   const amount = parseFloat(document.getElementById('pay-amount').value || 0);
   if (!amount || amount <= 0){ document.getElementById('pay-amount').focus(); return; }
   const p = state.persons.find(x => x.id === activePersonId);
   if (!p) return;
-  const { cashed, gain } = applyPayment(p, amount);
+  const { cashed, gain, cash } = applyPayment(p, amount);
   const soldé = personStats(p).remaining <= 0;
   save(); closeSheet('pay-bg'); render();
-  let msg = (gain > 0 ? '+' + fmtM(gain) + ' € de marge dans ta caisse'
+  let msg = (cash > 0 ? '+' + fmtM(cash) + ' € dans ta caisse' + (gain > 0 ? ' · dont ' + fmtM(gain) + ' € de marge' : '')
                       : fmtM(cashed) + ' € récupérés — ça couvre ton coût, pas encore de marge')
           + (soldé ? ' · ' + p.name + ' soldé·e' : '');
   if (cashed < amount) msg += ' (' + fmtM(amount-cashed) + ' € au-delà du dû, non enregistrés)';
@@ -1916,6 +2066,24 @@ function selfTest(){
   ok(frToISO('05/09/2026') === '2026-09-05' && frToISO('2026-09-05') === '2026-09-05', 'frToISO');
   ok(monthOf('2026-08-20') === '2026-08', 'monthOf');
 
+  // Avance : le cout reel devient une depense, et l'encaissement la rend en entier.
+  const keep = state.tx; state.tx = [];
+  const pc = { id:'pc', name:'Cost' };
+  const dc = { id:'dc', label:'Vinted', price:100, cost:60, paid:0, date:'2026-08-10' };
+  syncDebtTx(pc, dc);
+  ok(state.tx.length === 1 && dc.costTx === state.tx[0].id, 'une depense creee pour le cout reel');
+  ok(state.tx[0].type === 'out' && state.tx[0].amount === 60 && state.tx[0].src === 'debt', 'depense = le cout, pas le prix');
+  dc.cost = 70; syncDebtTx(pc, dc);
+  ok(state.tx.length === 1 && state.tx[0].amount === 70, 'modifier l\'avance reecrit la depense, ne la double pas');
+  const sc = stats(state.tx);
+  ok(sc.out === 70 && sc.ordinaryOut === 70 && sc.byCat.Avances === 70, 'le cout pese sur le rythme et se voit dans les postes');
+  ok(sc.byV.u + sc.byV.c + sc.byV.i === 0, 'aucun verdict Worth it? sur une avance');
+  const pay = applyPayment({ id:'pc', name:'Cost', debts:[dc] }, 100);
+  ok(pay.cash === 100 && state.tx.filter(t => t.type==='in')[0].amount === 100, 'cout deja sorti : tout l\'encaisse rentre');
+  dc.cost = 0; syncDebtTx(pc, dc);
+  ok(state.tx.filter(t => t.type==='out').length === 0, 'cout remis a zero : la depense disparait');
+  state.tx = keep;
+
   const before = state.tx.length;
   const p = { id:'ptest', name:'Test', debts:[ {id:'d1',price:100,cost:60,paid:0}, {id:'d2',price:50,cost:30,paid:0} ] };
   ok(applyPayment(p, 120).cashed === 120, 'encaissement réparti');
@@ -1923,7 +2091,7 @@ function selfTest(){
   ok(applyPayment(p, 999).cashed === 30, 'surplus non encaissé au-delà du dû');
   const created = state.tx.slice(before);
   ok(created.length === 2 && created.every(t => t.type==='in' && t.cat==='Remboursement' && t.src==='debt' && t.label==='Test'), 'entrées budget au nom de la personne');
-  ok(created[0].amount === 40 && created[1].amount === 20, 'seule la marge entre en caisse');
+  ok(created[0].amount === 40 && created[1].amount === 20, 'avance d\'avant, sans depense generee : seule la marge entre en caisse');
   state.tx.length = before;
 
   state.persons = [p];
