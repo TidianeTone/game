@@ -52,7 +52,10 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 .mval.big{font-size:28px}
 .msub{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.45}
 .chev{float:right;color:var(--faint);font-size:18px;line-height:1}
-.up-row{display:flex;align-items:baseline;gap:10px;font-size:13px;padding:6px 0;border-top:.5px solid var(--border)}
+.up-row{display:flex;align-items:baseline;gap:10px;width:100%;font-size:13px;font-family:inherit;padding:6px 0;border:none;border-top:.5px solid var(--border);background:none;color:var(--text);text-align:left}
+button.up-row{cursor:pointer;min-height:38px}
+.up-x{color:var(--faint);font-size:16px;line-height:1;width:14px;text-align:right}
+button.up-row:hover .up-x,button.up-row:focus-visible .up-x{color:var(--red)}
 .up-when{color:var(--muted);min-width:88px;font-size:12px}
 .up-what{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .up-amt{font-family:'DM Mono',monospace;font-weight:600}
@@ -626,7 +629,7 @@ const ICONS = {
   coffre:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>'
 };
 
-let state = { tx: [], caps: {}, cats: null, persons: [], buttons: [], migrated: false, mode: 'budget', month: null, adjust: null };
+let state = { tx: [], caps: {}, cats: null, persons: [], buttons: [], notRec: [], migrated: false, mode: 'budget', month: null, adjust: null };
 let readFailed = false, pendingOldData = null;
 let curTab = 'flux', monthFilter = 'all', dayFilter = null;
 let personQuery = '', hideSolded = false;   // filtres de vue, jamais persistés
@@ -673,9 +676,10 @@ function load(){
     try{
       const s = JSON.parse(raw);
       state.tx = s.tx||[]; state.caps = s.caps||{}; state.cats = s.cats||null;
-      state.buttons = s.buttons||[];
+      state.buttons = s.buttons||[]; state.notRec = s.notRec||[];
       state.persons = (s.persons||[]).map(fixPerson);
       state.migrated = !!s.migrated; state.mode = s.mode||'budget'; state.month = s.month||null;
+      state.rev = s.rev||0; state.by = s.by||''; state.at = s.at||'';   // save() l'ecrivait, load() le jetait
     }catch(e){
       readFailed = true;
       try{ localStorage.setItem(DB+'_corrupt_'+Date.now(), raw); }catch(_){}
@@ -797,7 +801,16 @@ function recurrents(){
     if (k.length < 3) return;
     (g[t.type+'|'+k] = g[t.type+'|'+k] || []).push(t);
   });
-  return Object.values(g).map(rows => {
+  // Une meme echeance ecrite de deux facons : « CAF » tape a la main et « CAF DE HAUTE GARONNE »
+  // venu du releve. Si un libelle commence l'autre, c'est la meme ligne — sans confondre pour
+  // autant « Google One » et « Google YouTubePremium », qui divergent des le deuxieme mot.
+  Object.keys(g).sort((a,b) => a.length - b.length).forEach(k => {
+    if (!g[k]) return;
+    Object.keys(g).forEach(k2 => { if (g[k2] && k2 !== k && k2.startsWith(k + ' ')){ g[k].push(...g[k2]); delete g[k2]; } });
+  });
+  return Object.entries(g).map(([key, rows]) => {
+    if (state.notRec.includes(key)) return null;   // ecarte a la main : ce n'etait pas une echeance
+    rows.sort((a,b) => (a.date||'').localeCompare(b.date||''));   // la fusion a melange les ordres
     const months = [...new Set(rows.map(t => monthOf(t.date)))].sort();
     if (months.length < 2) return null;              // deux mois differents, sinon c'est un hasard
     // Une echeance tombe une fois par mois. Uber Eats quinze fois dans le mois est frequent,
@@ -811,7 +824,7 @@ function recurrents(){
     if (Math.max(...days.map(x => Math.min(Math.abs(x-day), 31-Math.abs(x-day)))) > 3) return null;
     // « Loyer Aout Sow » annoncé pour septembre serait un contresens : le mois saute du libellé.
     const label = String(rows[rows.length-1].label||'').replace(MOIS_RE,' ').replace(/\s+/g,' ').trim();
-    return { label, type: rows[0].type, ids: rows.map(t => t.id),
+    return { label, key, type: rows[0].type, ids: rows.map(t => t.id),
              amount: median(rows.map(t => Math.abs(parseFloat(t.amount||0)))), day, months, n: months.length };
   }).filter(Boolean);
 }
@@ -1008,6 +1021,16 @@ function setMonth(m){ monthFilter = m; dayFilter = null; state.month = m; save(t
 function setDay(d){ dayFilter = d; render(); }
 function setFlow(f){ flowFilter = f; render(); }
 function toggleXOnly(){ xOnly = !xOnly; render(); }
+// Deux achats tombes le meme jour de deux mois ne font pas un abonnement. Stax devine, l'utilisateur
+// tranche : la ligne ecartee sort du runway et n'y revient plus, meme si l'achat se reproduit.
+function dropRecurrent(key){
+  if (state.notRec.includes(key)) return;
+  state.notRec.push(key);
+  save(); render();
+  toast('Retiré des échéances à venir.', 'Annuler', () => {
+    state.notRec = state.notRec.filter(k => k !== key); save(); render();
+  });
+}
 function revealFlows(){ showFlows = true; render(); }
 
 function renderMetrics(){
@@ -1069,13 +1092,14 @@ function renderMetrics(){
   const upCard = soon.length ? `<div class="mcard wide">
     <div class="mlabel">&#128197; À venir · 14 prochains jours</div>
     <div class="mval ${net>=0?'cg':'cr'}">${net>=0?'+':'−'}${fmtM(Math.abs(net))} €</div>
-    ${soon.slice(0,6).map(r => `<div class="up-row">
+    ${soon.slice(0,6).map(r => `<button class="up-row" onclick="dropRecurrent('${esc(r.key)}')" title="Ce n'est pas une échéance">
       <span class="up-when">${dayLabel(r.date)}</span>
       <span class="up-what">${esc(r.label)}</span>
-      <span class="up-amt ${r.type==='in'?'cg':'cr'}">${r.type==='in'?'+':'−'}${fmtM(r.amount)} €</span></div>`).join('')}
+      <span class="up-amt ${r.type==='in'?'cg':'cr'}">${r.type==='in'?'+':'−'}${fmtM(r.amount)} €</span>
+      <span class="up-x" aria-hidden="true">&times;</span></button>`).join('')}
     ${soon.length > 6 ? `<div class="up-row"><span class="up-when"></span><span class="up-what">et ${soon.length-6} autre${soon.length-6>1?'s':''} échéance${soon.length-6>1?'s':''} d'ici là</span>
-      <span class="up-amt cr">−${fmtM(soon.slice(6).reduce((a,r)=>a+(r.type==='in'?-1:1)*r.amount,0))} €</span></div>` : ''}
-    <div class="msub">Repéré tout seul : ces lignes reviennent chaque mois dans ton historique, à peu près le même jour. Montant et jour = la médiane des fois précédentes.</div></div>` : '';
+      <span class="up-amt cr">−${fmtM(soon.slice(6).reduce((a,r)=>a+(r.type==='in'?-1:1)*r.amount,0))} €</span><span class="up-x"></span></div>` : ''}
+    <div class="msub">Repéré tout seul : ces lignes reviennent chaque mois dans ton historique, à peu près le même jour. Montant et jour = la médiane des fois précédentes. Touche une ligne pour la retirer.</div></div>` : '';
 
   // Dire lequel des deux périmètres on lit, sinon le jour filtré fait passer les chiffres du mois pour les siens.
   const dayLine = dayFilter
@@ -1862,10 +1886,11 @@ function saveSync(){ try{ localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); 
 function syncOn(){ return !!sync.token; }
 
 function docOut(){ return { rev:(state.rev||0), by:sync.name, at:new Date().toISOString(),
-  tx:state.tx, caps:state.caps, cats:state.cats, persons:state.persons, buttons:state.buttons }; }
+  tx:state.tx, caps:state.caps, cats:state.cats, persons:state.persons, buttons:state.buttons, notRec:state.notRec }; }
 function adopt(d){
   state.tx = d.tx||[]; state.caps = d.caps||{}; state.cats = d.cats||SEED_CATS.slice();
   state.buttons = d.buttons||[];   // un doc écrit par une version d'avant les boutons n'en a pas
+  state.notRec = d.notRec||[];
   state.persons = (d.persons||[]).map(fixPerson);
   state.rev = d.rev||0; state.by = d.by||''; state.at = d.at||'';
 }
@@ -1915,7 +1940,7 @@ async function pull(force){
     }
     adopt(rem); sync.baseRev = rem.rev||0; sync.last = new Date().toISOString();
     dirty = false; saveSync(); save(true);
-    syncBusy = false; render(); renderSyncBtn();
+    syncBusy = false; render(); renderSyncBtn(); refreshSyncSheet();
     toast('À jour avec « ' + (rem.by||'?') + ' ».', null, null, 'good');
   }catch(e){ syncBusy=false; syncErr=e.message; renderSyncBtn(); toast(e.message, null, null, 'bad'); }
 }
@@ -1932,8 +1957,8 @@ async function push(force){
     await remoteWrite(docOut());
     sync.baseRev = state.rev; sync.last = new Date().toISOString();
     dirty = false; conflict = null; saveSync(); save(true);
-    syncBusy = false; renderSyncBtn(); render();
-  }catch(e){ syncBusy=false; syncErr=e.message; renderSyncBtn(); toast(e.message, null, null, 'bad'); }
+    syncBusy = false; renderSyncBtn(); render(); refreshSyncSheet();
+  }catch(e){ syncBusy=false; syncErr=e.message; renderSyncBtn(); refreshSyncSheet(); toast(e.message, null, null, 'bad'); }
 }
 
 // Le secondaire ne pousse jamais sans un oui explicite
@@ -1967,6 +1992,14 @@ function openSync(){
   document.getElementById('sy-token').value = sync.token;
   document.getElementById('sy-gist').value = sync.gistId;
   setRole(sync.role); renderSyncState(); openSheet('sync-bg');
+}
+// L'ID du gist n'existe qu'apres le premier Envoyer : sans ca la feuille reste vide et
+// un Enregistrer de plus efface la config qu'on vient de creer.
+function refreshSyncSheet(){
+  const bg = document.getElementById('sync-bg');
+  if (!bg || !bg.classList.contains('open')) return;
+  document.getElementById('sy-gist').value = sync.gistId;
+  renderSyncState();
 }
 function renderSyncState(){
   const when = sync.last ? new Date(sync.last).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'}) : 'jamais';
