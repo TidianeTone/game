@@ -783,7 +783,9 @@ function stats(list){
 // ── Ce qui revient tous les mois ──
 // Deduit de l'historique, pas saisi a la main : le loyer et la CAF sont deja dans les releves.
 // Un libelle porte souvent son mois (« Loyer Aout Sow ») : on le retire avant de comparer.
-const MOIS_RE = /\b(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre)\b/gi;
+// Formes longues ET abrégées : « Loyer Sept Sow » et « Loyer Aout Sow » sont le même loyer.
+// Pas de joker après l'abréviation — « dec » suivi de n'importe quoi avalerait « Decathlon ».
+const MOIS_RE = /\b(janvier|janv|f[ée]vrier|f[ée]vr|mars|avril|avr|mai|juin|juillet|juil|ao[ûu]t|septembre|sept|octobre|oct|novembre|nov|d[ée]cembre|d[ée]c)\.?\b/gi;
 function normLabel(s){
   return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
     .replace(MOIS_RE,' ').replace(/[^a-z ]+/g,' ').replace(/\s+/g,' ').trim();
