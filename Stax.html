@@ -52,6 +52,16 @@ button.mcard{text-align:left;width:100%;font-family:inherit;cursor:pointer;color
 .mval.big{font-size:28px}
 .msub{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.45}
 .chev{float:right;color:var(--faint);font-size:18px;line-height:1}
+.imp-list{max-height:46vh;overflow:auto;margin-bottom:12px;border:.5px solid var(--border);border-radius:10px}
+.imp-row{display:flex;align-items:center;gap:9px;font-size:13px;padding:8px 10px;border-bottom:.5px solid var(--border);cursor:pointer}
+.imp-row:last-child{border-bottom:none}
+.imp-row.here{opacity:.55}
+.imp-row input{flex:none;width:17px;height:17px;accent-color:var(--accent)}
+.imp-when{flex:none;width:40px;color:var(--muted);font-size:12px}
+.imp-what{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp-tag{margin-left:6px;color:var(--accent);font-size:11px}
+.imp-row.doubt .imp-tag{color:var(--violet)}
+.imp-amt{flex:none;font-family:'DM Mono',monospace;font-weight:600}
 .up-row{display:flex;align-items:baseline;gap:10px;width:100%;font-size:13px;padding:6px 0;border-top:.5px solid var(--border);color:var(--text);text-align:left}
 /* Seule la croix retire une échéance : une ligne entière cliquable se déclenche à côté. */
 button.up-x{flex:none;width:30px;min-height:30px;margin:-6px -8px -6px 0;padding:0;background:none;border:none;
@@ -518,6 +528,15 @@ span.up-x{flex:none;width:30px;margin-right:-8px}
 </div>
 
 <!-- Sheet : recalage -->
+<div class="sbg" id="imp-bg" onclick="closeSheet('imp-bg',event)">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Importer un relevé">
+    <div class="stitle" id="imp-title">Ton relevé</div>
+    <div class="xhint" id="imp-check" style="margin-bottom:10px"></div>
+    <div id="imp-list" class="imp-list"></div>
+    <button class="bfull" id="imp-ok" onclick="applyImport()">Ajouter</button>
+    <button class="bcancel" onclick="closeSheet('imp-bg')">Annuler</button>
+  </div>
+</div>
 <div class="sbg" id="recal-bg" onclick="closeSheet('recal-bg',event)">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Recaler la caisse">
     <div class="stitle">Recaler sur ton vrai solde</div>
@@ -582,7 +601,7 @@ span.up-x{flex:none;width:30px;margin-right:-8px}
 <script>
 // Interrupteurs de build. La version publique (sans dettes, sans synchro perso) se fait en basculant
 // ces trois booléens — aucune autre ligne à toucher.
-const FEATURES = { dettes:true, sync:true, releves:false };
+const FEATURES = { dettes:true, sync:true, releves:true };
 const DB = 'delve_v1', OLD_DB = 'dettes_v1';
 // Postes calés sur les relevés Nickel d'avril et juin 2026 (plafonds = moyenne mensuelle observée, à ajuster)
 const SEED_CATS = ['Livraison','Courses','Kebab/Resto','Monster','Tabac/Vape','Transport','Abos','Achats','Santé','Retraits','Frais','Logement','Remboursement','Autre'];
@@ -608,6 +627,119 @@ function guessCat(label){
 }
 // Seam de la version publique : des lignes de relev\u00e9 en entr\u00e9e, des mouvements en sortie.
 // Aucun verdict devin\u00e9 \u2014 juger reste le travail de l'utilisateur, c'est tout l'int\u00e9r\u00eat.
+// ── Lecture d'un relevé Nickel (PDF) ────────────────────────────────────────
+// Sans bibliothèque : les flux sont dégonflés par DecompressionStream, la police est
+// en Identity-H et le PDF embarque sa table ToUnicode. On garde le fichier sur la machine —
+// le budget qui ne part chez personne est la moitié de l'intérêt de cette app.
+// ponytail: écrit pour la mise en page Nickel (colonnes N° / date / type / libellé / montant).
+// Un autre relevé demandera d'autres seuils de colonnes, pas un autre lecteur.
+// On lit le flux à la main plutôt que par Response() : ouvert depuis un fichier local,
+// l'app n'a pas le droit de passer par fetch, et un import qui ne marche qu'en ligne
+// n'aurait plus grand-chose de local.
+async function inflate(bytes){
+  const ds = new DecompressionStream('deflate');
+  const w = ds.writable.getWriter();
+  w.write(bytes); w.close();                 // pas d'await : le lecteur ci-dessous vide la file
+  const r = ds.readable.getReader();
+  const parts = [];
+  let n = 0, x;
+  while (!(x = await r.read()).done){ parts.push(x.value); n += x.value.length; }
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const p of parts){ out.set(p, o); o += p.length; }
+  return out;
+}
+const latin1 = b => { let s = ''; for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return s; };
+
+async function pdfFragments(bytes){
+  const raw = latin1(bytes), all = [], re = /stream\r?\n/g;
+  let m;
+  while ((m = re.exec(raw))){
+    const a = m.index + m[0].length;
+    let b = raw.indexOf('endstream', a);
+    if (b < 0) continue;
+    // DecompressionStream refuse le moindre octet en trop après les données ; le saut de
+    // ligne qui précède « endstream » n'en fait pas partie.
+    while (b > a && (bytes[b-1] === 10 || bytes[b-1] === 13 || bytes[b-1] === 32 || bytes[b-1] === 9)) b--;
+    try { all.push(latin1(await inflate(bytes.subarray(a, b)))); } catch (e) {}
+  }
+  // La table ToUnicode : du code de glyphe vers le vrai caractère.
+  const cm = all.find(t => /beginbfchar|beginbfrange/.test(t)) || '';
+  const map = new Map();
+  for (const blk of cm.match(/beginbfchar([\s\S]*?)endbfchar/g) || [])
+    for (const x of blk.matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g))
+      map.set(parseInt(x[1],16), String.fromCharCode(parseInt(x[2].slice(0,4),16)));
+  for (const blk of cm.match(/beginbfrange([\s\S]*?)endbfrange/g) || [])
+    for (const x of blk.matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)){
+      const lo = parseInt(x[1],16), hi = parseInt(x[2],16), d0 = parseInt(x[3].slice(0,4),16);
+      for (let c = lo; c <= hi; c++) map.set(c, String.fromCharCode(d0 + c - lo));
+    }
+  const cid = n => map.get(n) ?? '';
+  const fromHex = h => { let r = ''; for (let i = 0; i+4 <= h.length; i += 4) r += cid(parseInt(h.slice(i,i+4),16)); return r; };
+  const bytesOf = s => {              // chaîne littérale PDF : \( \) \\ \n et octal \053
+    const o = [];
+    for (let i = 0; i < s.length; i++){
+      const c = s[i];
+      if (c !== '\\'){ o.push(s.charCodeAt(i)); continue; }
+      const n = s[++i];
+      if (n === undefined) break;
+      if (n >= '0' && n <= '7'){ let q = n; while (q.length < 3 && s[i+1] >= '0' && s[i+1] <= '7') q += s[++i]; o.push(parseInt(q,8)); }
+      else o.push({ n:10, r:13, t:9, b:8, f:12 }[n] ?? s.charCodeAt(i));
+    }
+    return o;
+  };
+  const fromLit = s => { const b = bytesOf(s); let r = ''; for (let i = 0; i+1 < b.length; i += 2) r += cid((b[i]<<8)|b[i+1]); return r; };
+
+  const items = [];
+  all.filter(t => /\bTj\b|\bTJ\b/.test(t)).forEach((t, page) => {
+    let x = 0, y = 0, lx = 0, ly = 0;
+    const rx = /(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+Tm|(-?[\d.]+)\s+(-?[\d.]+)\s+T[dD]\b|\bT\*|<([0-9a-fA-F]*)>\s*Tj|\(((?:[^()\\]|\\[\s\S])*)\)\s*Tj/g;
+    let q;
+    while ((q = rx.exec(t))){
+      if (q[1] !== undefined){ x = lx = +q[5]; y = ly = +q[6]; }
+      else if (q[7] !== undefined){ x = lx += +q[7]; y = ly += +q[8]; }
+      else if (q[0] === 'T*'){ y = ly -= 11; x = lx; }
+      else {
+        const str = q[9] !== undefined ? fromHex(q[9]) : fromLit(q[10]);
+        if (str.trim()) items.push({ page, x, y, s: str.trim() });
+      }
+    }
+  });
+  return items;
+}
+const pdfNum = s => { const t = String(s).replace(/[\s  ]/g,'').replace('€','').replace(',','.'); return /^-?\d+(\.\d+)?$/.test(t) ? +t : null; };
+
+// Des fragments positionnés aux lignes du relevé, plus les trois chiffres qui servent
+// de contrôle : débit du mois, crédit du mois, solde disponible à la date de clôture.
+function statementRows(items){
+  items.sort((a,b) => a.page - b.page || b.y - a.y || a.x - b.x);
+  const near = it => items.filter(p => p.page === it.page && Math.abs(p.y - it.y) < 9);
+  const out = [];
+  let solde = null, soldeDate = null, debit = null, credit = null;
+  items.forEach(it => {
+    if (/^Débit sur le mois$/i.test(it.s))  debit  = near(it).map(p => pdfNum(p.s)).filter(v => v !== null).pop();
+    if (/^Crédit sur le mois$/i.test(it.s)) credit = near(it).map(p => pdfNum(p.s)).filter(v => v !== null).pop();
+    if (/^Solde disponible$/i.test(it.s)){
+      const band = near(it);
+      const d = band.find(p => /^le (\d{2}\/\d{2}\/\d{4})$/.test(p.s));
+      soldeDate = d ? d.s.slice(3) : null;
+      solde = band.map(p => pdfNum(p.s)).filter(v => v !== null).pop() ?? null;
+    }
+    // Une opération commence par son numéro d'ordre, colonne de gauche.
+    if (it.x > 55 && it.x < 70 && /^\d+$/.test(it.s)){
+      const band = near(it);
+      const date = (band.find(p => p.x > 72 && p.x < 100 && /^\d{2}\/\d{2}\/\d{4}$/.test(p.s)) || {}).s;
+      const amount = band.filter(p => p.x > 470).map(p => pdfNum(p.s)).filter(v => v !== null).pop();
+      const type = (band.find(p => p.x > 120 && p.x < 240) || {}).s || '';
+      const label = band.filter(p => p.x > 240 && p.x < 470).map(p => p.s).join(' ');
+      if (date && amount != null) out.push({ n:+it.s, date, type, label: (label || type).trim(), amount });
+    }
+  });
+  // Un même numéro deux fois = un fragment lu deux fois, jamais deux opérations.
+  const seen = new Set();
+  return { rows: out.filter(r => !seen.has(r.n) && seen.add(r.n)), solde, soldeDate, debit, credit };
+}
+
 function ingest(rows){
   return (rows||[]).map(r => ({
     id: uid(),
@@ -771,6 +903,10 @@ function stats(list){
     // Le cout d'une avance sort vraiment de la poche : il pese sur le rythme et se voit
     // dans les postes, mais il n'a pas ete « choisi » -- aucun verdict a rendre dessus.
     if (t.src === 'debt'){ s.byCat['Avances'] = (s.byCat['Avances']||0) + a; return; }
+    // Un mouvement importé compte dans le rythme et dans les postes, mais reste hors de
+    // Worth it? tant qu'aucun verdict n'a été posé : 164 lignes rangées d'office en « Confort »
+    // feraient mesurer à l'onglet un import, pas un jugement.
+    if (t.src === 'import' && !t.v){ s.byCat[t.cat||'Autre'] = (s.byCat[t.cat||'Autre']||0) + a; return; }
     const c = t.cat || 'Autre';
     s.byCat[c] = (s.byCat[c]||0) + a;
     const v = VERDICTS[t.v] ? t.v : 'c';
@@ -1125,7 +1261,9 @@ function renderMetrics(){
 
   document.getElementById('metrics').innerHTML = `
     <div class="mcard wide" id="cash-card">${hero}${xLine}${dayLine}
-      <button class="recal" onclick="openRecal()">Recaler sur mon vrai solde${state.adjust ? ' &middot; dernier le ' + dayLabel(state.adjust.date) : ''}</button></div>
+      <button class="recal" onclick="openRecal()">Recaler sur mon vrai solde${state.adjust ? ' &middot; dernier le ' + dayLabel(state.adjust.date) : ''}</button>
+      ${FEATURES.releves ? `<button class="recal" onclick="document.getElementById('imp-file').click()">Importer mon relevé Nickel (PDF)</button>
+      <input type="file" id="imp-file" accept="application/pdf,.pdf" style="display:none" onchange="readStatement(this)"/>` : ''}</div>
     ${upCard}
     ${showFlows
       ? `<div class="mcard"><div class="mlabel">Rentr&eacute;</div><div class="mval cg">+${fmtM(s.in)} &euro;</div></div>
@@ -1685,6 +1823,86 @@ function recalHint(){
     : `Caisse calcul&eacute;e ${fmtM(t.solde)} &euro; &middot; r&eacute;el ${fmtM(b+c)} &euro; &rarr; <span class="${gap>0?'cg':'cr'}">`
       + `${gap>0?'oubli de rentr&eacute;e':'d&eacute;penses oubli&eacute;es'} de ${fmtM(Math.abs(gap))} &euro;</span>`;
 }
+// ── Import d'un relevé : trois piles, aucune écriture avant validation ──
+// Le relevé fait autorité sur les montants et les dates ; sur ce qui est déjà noté, c'est
+// l'utilisateur. D'où les trois piles plutôt qu'une fusion automatique : un doublon silencieux
+// gonfle le rythme journalier, donc raccourcit le runway sans jamais dire pourquoi.
+let imported = null;
+async function readStatement(input){
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  toast('Lecture du relevé…');
+  try {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const st = statementRows(await pdfFragments(bytes));
+    if (!st.rows.length){ toast("Aucune opération lue dans ce PDF.", null, null, 'bad'); return; }
+    hideToast();
+    openImport(st);
+  } catch (e){
+    toast('Relevé illisible : ' + e.message, null, null, 'bad');
+  }
+}
+// Déjà là = même sens, même montant, même jour. Douteux = même montant à deux jours près :
+// c'est le cas de la saisie faite de mémoire la veille ou le lendemain.
+function classifyRow(r, used){
+  const iso = frToISO(r.date), type = r.amount >= 0 ? 'in' : 'out', a = Math.abs(r.amount);
+  const same = t => !used.has(t.id) && t.type === type && Math.abs(Math.abs(parseFloat(t.amount||0)) - a) < 0.005;
+  const exact = state.tx.find(t => same(t) && t.date === iso);
+  if (exact){ used.add(exact.id); return { kind:'here', tx:exact }; }
+  const near = state.tx.find(t => same(t) && Math.abs(new Date(t.date+'T12:00:00') - new Date(iso+'T12:00:00')) <= 2*864e5);
+  if (near){ used.add(near.id); return { kind:'doubt', tx:near }; }
+  return { kind:'new' };
+}
+function openImport(st){
+  const used = new Set();
+  imported = { st, lines: st.rows.map(r => ({ r, ...classifyRow(r, used) })) };
+  imported.lines.forEach(l => l.take = l.kind === 'new');
+  renderImport();
+  openSheet('imp-bg');
+}
+function renderImport(){
+  const L = imported.lines, st = imported.st;
+  const n = k => L.filter(l => l.kind === k).length;
+  const somme = L.reduce((a,l) => a + l.r.amount, 0);
+  // Le relevé porte son propre contrôle : crédit − débit doit retomber sur la somme lue.
+  const attendu = (st.credit != null && st.debit != null) ? st.credit - st.debit : null;
+  const juste = attendu != null && Math.abs(attendu - somme) < 0.02;
+  document.getElementById('imp-title').textContent =
+    st.rows.length + ' opération' + (st.rows.length>1?'s':'') + ' lues';
+  document.getElementById('imp-check').innerHTML =
+    (attendu != null
+      ? `<span class="${juste?'cg':'cr'}">${juste ? '✓ Lecture vérifiée' : '⚠ Lecture douteuse'}</span> :
+         le relevé annonce ${fmtM(st.debit)} € de débit et ${fmtM(st.credit)} € de crédit, les lignes lues font ${fmtM(somme)} €.`
+      : 'Contrôle débit/crédit absent de ce relevé.')
+    + (st.solde != null ? `<br/>Solde du relevé au ${st.soldeDate} : <strong>${fmtM(st.solde)} €</strong> —
+        c'est la banque seule, pas tes espèces : Stax ne recale pas dessus tout seul.` : '')
+    + `<br/><strong>${n('new')}</strong> nouvelle${n('new')>1?'s':''} ·
+       <strong>${n('here')}</strong> déjà notée${n('here')>1?'s':''} ·
+       <strong>${n('doubt')}</strong> douteuse${n('doubt')>1?'s':''} (même montant à un jour ou deux près)`;
+  document.getElementById('imp-list').innerHTML = L.map((l,i) => `<label class="imp-row ${l.kind}">
+      <input type="checkbox" ${l.take?'checked':''} onchange="imported.lines[${i}].take=this.checked;renderImport()"/>
+      <span class="imp-when">${l.r.date.slice(0,5)}</span>
+      <span class="imp-what">${esc(l.r.label).slice(0,60)}${l.kind!=='new'?`<span class="imp-tag">${l.kind==='here'?'déjà notée le '+l.tx.date.slice(8)+'/'+l.tx.date.slice(5,7):'proche du '+l.tx.date.slice(8)+'/'+l.tx.date.slice(5,7)}</span>`:''}</span>
+      <span class="imp-amt ${l.r.amount>=0?'cg':'cr'}">${l.r.amount>=0?'+':'−'}${fmtM(Math.abs(l.r.amount))} €</span>
+    </label>`).join('');
+  const k = L.filter(l => l.take).length;
+  const btn = document.getElementById('imp-ok');
+  btn.textContent = k ? 'Ajouter ' + k + ' mouvement' + (k>1?'s':'') : 'Rien à ajouter';
+  btn.disabled = !k;
+}
+function applyImport(){
+  const take = imported.lines.filter(l => l.take).map(l => l.r);
+  // Poste deviné, verdict jamais : juger reste le geste que l'app veut faire faire.
+  const tx = ingest(take.map(r => ({ date:r.date, label:r.label, amount:r.amount })))
+    .map(t => ({ ...t, src:'import' }));
+  state.tx.push(...tx);
+  save(); closeSheet('imp-bg'); render();
+  toast(tx.length + ' mouvement' + (tx.length>1?'s ajoutés':' ajouté') + ' · verdict à poser dans Worth it?',
+        'Annuler', () => { const ids = new Set(tx.map(t => t.id)); state.tx = state.tx.filter(t => !ids.has(t.id)); save(); render(); }, 'good');
+  imported = null;
+}
+
 function openRecal(){
   const a = state.adjust || {};
   document.getElementById('rc-bank').value = '';
